@@ -7,11 +7,10 @@ const db = require('../db');
 router.get('/', async (req, res) => {
   try {
     const result = await db.query(`
-      SELECT p.*, c.name AS category_name
-      FROM products p
-      LEFT JOIN categories c ON p.category_id = c.id
-      ORDER BY p.id DESC
-    `);
+  SELECT *
+  FROM products
+  ORDER BY id DESC
+`);
     res.json(result.rows);
   } catch (err) {
     console.error('Erreur GET /products:', err);
