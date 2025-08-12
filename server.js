@@ -3,7 +3,7 @@ const cors = require('cors');
 require('dotenv').config(); // pour charger .env en local
 
 const app = express();
-const port = process.env.PORT || 3000; // Render fournit PORT automatiquement
+const port = process.env.PORT || 4000; // Render fournit PORT automatiquement
 
 app.use(cors());
 app.use(express.json());
