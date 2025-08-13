@@ -9,6 +9,7 @@ const pool = require("../db");
 // ==========================
 router.post("/register", async (req, res) => {
     const { username, password } = req.body;
+
     if (!username || !password) {
         return res.status(400).json({ error: "Champs manquants" });
     }
@@ -33,9 +34,10 @@ router.post("/register", async (req, res) => {
         );
 
         res.status(201).json({ message: "Compte créé avec succès" });
+
     } catch (err) {
-        console.error(err);
-        res.status(500).json({ error: "Erreur serveur" });
+        console.error("❌ Erreur lors de l'inscription :", err);
+        res.status(500).json({ error: err.message });
     }
 });
 
@@ -44,6 +46,7 @@ router.post("/register", async (req, res) => {
 // ==========================
 router.post("/login", async (req, res) => {
     const { username, password } = req.body;
+
     if (!username || !password) {
         return res.status(400).json({ error: "Champs manquants" });
     }
@@ -70,9 +73,10 @@ router.post("/login", async (req, res) => {
         );
 
         res.json({ token });
+
     } catch (err) {
-        console.error(err);
-        res.status(500).json({ error: "Erreur serveur" });
+        console.error("❌ Erreur lors de la connexion :", err);
+        res.status(500).json({ error: err.message });
     }
 });
 
@@ -99,8 +103,8 @@ router.get("/users", authenticateToken, async (req, res) => {
         const result = await pool.query("SELECT id, username FROM users");
         res.json(result.rows);
     } catch (err) {
-        console.error(err);
-        res.status(500).json({ error: "Erreur serveur" });
+        console.error("❌ Erreur lors de la récupération des utilisateurs :", err);
+        res.status(500).json({ error: err.message });
     }
 });
 
