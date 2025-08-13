@@ -15,13 +15,14 @@ router.get('/', async (req, res) => {
 router.post('/', async (req, res) => {
   try {
     const { name } = req.body;
-    if (!name) {
+
+    if (!name || name.trim() === '') {
       return res.status(400).json({ error: 'Le nom de la catégorie est requis' });
     }
 
     const result = await db.query(
       'INSERT INTO categories (name) VALUES ($1) RETURNING *',
-      [name]
+      [name.trim()]
     );
 
     res.status(201).json(result.rows[0]);
