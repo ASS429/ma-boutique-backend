@@ -1,9 +1,16 @@
 const express = require('express');
 const cors = require('cors');
+<<<<<<< HEAD
 require('dotenv').config();
 
 const app = express();
 const port = process.env.PORT || 4000;
+=======
+require('dotenv').config(); // pour charger .env en local
+
+const app = express();
+const port = process.env.PORT || 3000; // Render fournit PORT automatiquement
+>>>>>>> f3bf87e (Mes modifications locales)
 
 // Middleware
 app.use(cors());
@@ -21,6 +28,7 @@ app.use('/stats', require('./routes/stats'));
 app.get('/', (req, res) => {
   res.send('✅ API en ligne et opérationnelle !');
 });
+
 
 app.listen(port, () => {
   console.log(`🚀 Backend lancé sur http://localhost:${port}`);
