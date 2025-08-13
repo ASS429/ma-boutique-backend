@@ -1,16 +1,8 @@
 const express = require('express');
 const cors = require('cors');
-<<<<<<< HEAD
 require('dotenv').config();
-
 const app = express();
 const port = process.env.PORT || 4000;
-=======
-require('dotenv').config(); // pour charger .env en local
-
-const app = express();
-const port = process.env.PORT || 3000; // Render fournit PORT automatiquement
->>>>>>> f3bf87e (Mes modifications locales)
 
 // Middleware
 app.use(cors());
