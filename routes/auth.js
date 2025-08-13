@@ -11,35 +11,44 @@ router.post("/register", async (req, res) => {
     const { username, password } = req.body;
 
     if (!username || !password) {
-        return res.status(400).json({ error: "Champs manquants" });
+        return res.status(400).json({
+            error: "Champs manquants",
+            details: "Le champ 'username' ou 'password' est vide."
+        });
     }
 
     try {
-        // Vérifier si l'utilisateur existe déjà
         const existingUser = await pool.query(
             "SELECT * FROM users WHERE username = $1",
             [username]
         );
         if (existingUser.rows.length > 0) {
-            return res.status(400).json({ error: "Utilisateur déjà existant" });
+            return res.status(400).json({
+                error: "Utilisateur déjà existant",
+                details: `Le nom d'utilisateur '${username}' est déjà pris.`
+            });
         }
 
-        // Hacher le mot de passe
         const hashedPassword = await bcrypt.hash(password, 10);
-
-        // Insérer en base
-        await pool.query(
-            "INSERT INTO users (username, password) VALUES ($1, $2)",
+        const result = await pool.query(
+            "INSERT INTO users (username, password) VALUES ($1, $2) RETURNING id, username",
             [username, hashedPassword]
         );
 
-        res.status(201).json({ message: "Compte créé avec succès" });
+        res.status(201).json({
+            message: "Compte créé avec succès",
+            user: result.rows[0]
+        });
 
     } catch (err) {
         console.error("❌ Erreur lors de l'inscription :", err);
-        res.status(500).json({ error: err.message });
+        res.status(500).json({
+            error: "Erreur serveur",
+            details: err.message || err
+        });
     }
 });
+
 
 // ==========================
 //   Connexion
