@@ -1,34 +1,49 @@
 const express = require('express');
 const bcrypt = require('bcrypt');
 const jwt = require('jsonwebtoken');
+const pool = require('../db'); // connexion DB
 const router = express.Router();
-
-// Exemple stockage en mémoire (à remplacer par ta base de données)
-let utilisateurs = [];
 
 router.post('/register', async (req, res) => {
     const { email, password } = req.body;
     if (!email || !password) return res.status(400).json({ message: 'Champs manquants' });
 
-    const existe = utilisateurs.find(u => u.email === email);
-    if (existe) return res.status(400).json({ message: 'Email déjà utilisé' });
-
-    const hashedPassword = await bcrypt.hash(password, 10);
-    utilisateurs.push({ email, password: hashedPassword });
-
-    res.json({ message: 'Utilisateur créé' });
+    try {
+        const hashedPassword = await bcrypt.hash(password, 10);
+        const result = await pool.query(
+            'INSERT INTO users (email, password) VALUES ($1, $2) RETURNING id',
+            [email, hashedPassword]
+        );
+        res.json({ message: 'Utilisateur créé', userId: result.rows[0].id });
+    } catch (err) {
+        if (err.code === '23505') { // violation contrainte UNIQUE
+            return res.status(400).json({ message: 'Email déjà utilisé' });
+        }
+        console.error(err);
+        res.status(500).json({ message: 'Erreur serveur' });
+    }
 });
 
 router.post('/login', async (req, res) => {
     const { email, password } = req.body;
-    const user = utilisateurs.find(u => u.email === email);
-    if (!user) return res.status(400).json({ message: 'Utilisateur introuvable' });
+    if (!email || !password) return res.status(400).json({ message: 'Champs manquants' });
 
-    const match = await bcrypt.compare(password, user.password);
-    if (!match) return res.status(400).json({ message: 'Mot de passe incorrect' });
+    try {
+        const result = await pool.query('SELECT * FROM users WHERE email = $1', [email]);
+        if (result.rows.length === 0) {
+            return res.status(400).json({ message: 'Utilisateur introuvable' });
+        }
 
-    const token = jwt.sign({ email: user.email }, process.env.JWT_SECRET, { expiresIn: '2h' });
-    res.json({ token });
+        const user = result.rows[0];
+        const match = await bcrypt.compare(password, user.password);
+        if (!match) return res.status(400).json({ message: 'Mot de passe incorrect' });
+
+        const token = jwt.sign({ id: user.id, email: user.email }, process.env.JWT_SECRET, { expiresIn: '2h' });
+        res.json({ token });
+    } catch (err) {
+        console.error(err);
+        res.status(500).json({ message: 'Erreur serveur' });
+    }
 });
 
 module.exports = router;
