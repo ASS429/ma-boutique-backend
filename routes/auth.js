@@ -1,48 +1,106 @@
-const express = require('express');
-const bcrypt = require('bcrypt');
-const jwt = require('jsonwebtoken');
-const pool = require('../db'); // connexion DB
+const express = require("express");
 const router = express.Router();
+const bcrypt = require("bcryptjs");
+const jwt = require("jsonwebtoken");
+const pool = require("../db");
 
-router.post('/register', async (req, res) => {
-    const { email, password } = req.body;
-    if (!email || !password) return res.status(400).json({ message: 'Champs manquants' });
+// ==========================
+//   Inscription
+// ==========================
+router.post("/register", async (req, res) => {
+    const { username, password } = req.body;
+    if (!username || !password) {
+        return res.status(400).json({ error: "Champs manquants" });
+    }
 
     try {
-        const hashedPassword = await bcrypt.hash(password, 10);
-        const result = await pool.query(
-            'INSERT INTO users (email, password) VALUES ($1, $2) RETURNING id',
-            [email, hashedPassword]
+        // Vérifier si l'utilisateur existe déjà
+        const existingUser = await pool.query(
+            "SELECT * FROM users WHERE username = $1",
+            [username]
         );
-        res.json({ message: 'Utilisateur créé', userId: result.rows[0].id });
-    } catch (err) {
-        if (err.code === '23505') { // violation contrainte UNIQUE
-            return res.status(400).json({ message: 'Email déjà utilisé' });
+        if (existingUser.rows.length > 0) {
+            return res.status(400).json({ error: "Utilisateur déjà existant" });
         }
+
+        // Hacher le mot de passe
+        const hashedPassword = await bcrypt.hash(password, 10);
+
+        // Insérer en base
+        await pool.query(
+            "INSERT INTO users (username, password) VALUES ($1, $2)",
+            [username, hashedPassword]
+        );
+
+        res.status(201).json({ message: "Compte créé avec succès" });
+    } catch (err) {
         console.error(err);
-        res.status(500).json({ message: 'Erreur serveur' });
+        res.status(500).json({ error: "Erreur serveur" });
     }
 });
 
-router.post('/login', async (req, res) => {
-    const { email, password } = req.body;
-    if (!email || !password) return res.status(400).json({ message: 'Champs manquants' });
+// ==========================
+//   Connexion
+// ==========================
+router.post("/login", async (req, res) => {
+    const { username, password } = req.body;
+    if (!username || !password) {
+        return res.status(400).json({ error: "Champs manquants" });
+    }
 
     try {
-        const result = await pool.query('SELECT * FROM users WHERE email = $1', [email]);
-        if (result.rows.length === 0) {
-            return res.status(400).json({ message: 'Utilisateur introuvable' });
+        const user = await pool.query(
+            "SELECT * FROM users WHERE username = $1",
+            [username]
+        );
+
+        if (user.rows.length === 0) {
+            return res.status(400).json({ error: "Utilisateur introuvable" });
         }
 
-        const user = result.rows[0];
-        const match = await bcrypt.compare(password, user.password);
-        if (!match) return res.status(400).json({ message: 'Mot de passe incorrect' });
+        const validPassword = await bcrypt.compare(password, user.rows[0].password);
+        if (!validPassword) {
+            return res.status(401).json({ error: "Mot de passe incorrect" });
+        }
 
-        const token = jwt.sign({ id: user.id, email: user.email }, process.env.JWT_SECRET, { expiresIn: '2h' });
+        const token = jwt.sign(
+            { id: user.rows[0].id, username: user.rows[0].username },
+            process.env.JWT_SECRET,
+            { expiresIn: "1h" }
+        );
+
         res.json({ token });
     } catch (err) {
         console.error(err);
-        res.status(500).json({ message: 'Erreur serveur' });
+        res.status(500).json({ error: "Erreur serveur" });
+    }
+});
+
+// ==========================
+//   Middleware Auth
+// ==========================
+function authenticateToken(req, res, next) {
+    const authHeader = req.headers["authorization"];
+    const token = authHeader && authHeader.split(" ")[1];
+    if (!token) return res.sendStatus(401);
+
+    jwt.verify(token, process.env.JWT_SECRET, (err, user) => {
+        if (err) return res.sendStatus(403);
+        req.user = user;
+        next();
+    });
+}
+
+// ==========================
+//   Liste des utilisateurs
+// ==========================
+router.get("/users", authenticateToken, async (req, res) => {
+    try {
+        const result = await pool.query("SELECT id, username FROM users");
+        res.json(result.rows);
+    } catch (err) {
+        console.error(err);
+        res.status(500).json({ error: "Erreur serveur" });
     }
 });
 
