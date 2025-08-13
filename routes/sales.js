@@ -1,6 +1,7 @@
 const express = require('express');
 const router = express.Router();
 const db = require('../db'); // Assure-toi que ce module connecte bien à PostgreSQL
+const verifyToken = require('../middleware/auth');
 
 // 🔸 GET /sales - Liste des ventes
 router.get('/', async (req, res) => {
@@ -55,6 +56,22 @@ router.post('/', async (req, res) => {
     console.error('Erreur enregistrement vente :', err);
     res.status(500).json({ error: 'Erreur lors de l’enregistrement de la vente' });
   }
+});
+// Modifier une vente
+router.put('/:id', verifyToken, async (req, res) => {
+    const { id } = req.params;
+    const { total, paiement } = req.body;
+    
+    // Ici : mise à jour dans ta base (exemple fictif)
+    res.json({ message: `Vente ${id} modifiée`, total, paiement });
+});
+
+// Annuler une vente
+router.delete('/:id', verifyToken, async (req, res) => {
+    const { id } = req.params;
+    
+    // Ici : suppression dans ta base (exemple fictif)
+    res.json({ message: `Vente ${id} annulée` });
 });
 
 module.exports = router;
