@@ -14,14 +14,20 @@ const allowedOrigins = [
 
 app.use(cors({
   origin: function (origin, callback) {
-    if (!origin) return callback(null, true);                // ex: Postman
-    return allowedOrigins.includes(origin)
+    // Autoriser si pas d'origine (ex: Postman, local file://)
+    if (!origin || origin === 'null') return callback(null, true);
+
+    // Vérifie si l'origine commence par un domaine autorisé
+    const isAllowed = allowedOrigins.some(o => origin.startsWith(o));
+
+    return isAllowed
       ? callback(null, true)
       : callback(new Error('Not allowed by CORS: ' + origin));
   },
   methods: ['GET', 'POST', 'PUT', 'DELETE'],
   credentials: true
 }));
+
 
 app.use(express.json());
 
