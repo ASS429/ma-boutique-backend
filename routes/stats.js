@@ -22,23 +22,35 @@ router.get('/ventes-par-categorie', async (req, res) => {
   }
 });
 
-// 2. Ventes par jour
+// 2. Ventes par jour (uniquement aujourd'hui, avec CA et quantité)
 router.get('/ventes-par-jour', async (req, res) => {
   try {
     const { rows } = await db.query(`
       SELECT DATE(s.created_at) AS date,
+             SUM(s.quantity) AS total_quantite,
              SUM(s.quantity * p.price) AS total_montant
       FROM sales s
       JOIN products p ON s.product_id = p.id
       WHERE DATE(s.created_at) = CURRENT_DATE
       GROUP BY DATE(s.created_at)
     `);
+
+    // Si aucune vente aujourd'hui, on renvoie 0
+    if (rows.length === 0) {
+      return res.json([{
+        date: new Date().toISOString().split('T')[0],
+        total_quantite: 0,
+        total_montant: 0
+      }]);
+    }
+
     res.json(rows);
   } catch (err) {
     console.error(err);
     res.status(500).json({ error: 'Erreur serveur' });
   }
 });
+
 
 
 // 3. Répartition paiements
