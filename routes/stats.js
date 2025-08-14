@@ -30,8 +30,8 @@ router.get('/ventes-par-jour', async (req, res) => {
              SUM(s.quantity * p.price) AS total_montant
       FROM sales s
       JOIN products p ON s.product_id = p.id
+      WHERE DATE(s.created_at) = CURRENT_DATE
       GROUP BY DATE(s.created_at)
-      ORDER BY date ASC
     `);
     res.json(rows);
   } catch (err) {
@@ -39,6 +39,7 @@ router.get('/ventes-par-jour', async (req, res) => {
     res.status(500).json({ error: 'Erreur serveur' });
   }
 });
+
 
 // 3. Répartition paiements
 router.get('/paiements', async (req, res) => {
