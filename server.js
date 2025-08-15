@@ -16,7 +16,7 @@ const allowedOrigins = [
 
 app.use(cors({
   origin: function (origin, callback) {
-    // Autoriser si pas d'origine (ex: Postman, local file://)
+    // Autoriser si pas d'origine (ex: Postman, file://)
     if (!origin || origin === 'null') return callback(null, true);
 
     // Vérifie si l'origine commence par un domaine autorisé
@@ -27,8 +27,10 @@ app.use(cors({
       : callback(new Error('Not allowed by CORS: ' + origin));
   },
   methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
+  allowedHeaders: ['Content-Type', 'Authorization'], // 🔹 Autoriser Authorization
   credentials: true
 }));
+
 app.options('*', cors());
 
 app.use(express.json());
