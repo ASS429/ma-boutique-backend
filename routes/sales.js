@@ -1,17 +1,18 @@
 const express = require('express');
 const router = express.Router();
-const db = require('../db'); // Assure-toi que ce module connecte bien à PostgreSQL
+const db = require('../db');
 const verifyToken = require('../middleware/auth');
 
-// 🔸 GET /sales - Liste des ventes
-router.get('/', async (req, res) => {
+// GET : Liste ventes utilisateur
+router.get('/', verifyToken, async (req, res) => {
   try {
     const result = await db.query(`
-  SELECT s.*, p.name AS product_name
-  FROM sales s
-  JOIN products p ON s.product_id = p.id
-  ORDER BY s.created_at DESC
-`);
+      SELECT s.*, p.name AS product_name
+      FROM sales s
+      JOIN products p ON s.product_id = p.id
+      WHERE s.user_id = $1
+      ORDER BY s.created_at DESC
+    `, [req.user.id]);
 
     res.json(result.rows);
   } catch (err) {
@@ -20,18 +21,18 @@ router.get('/', async (req, res) => {
   }
 });
 
-// 🔸 POST /sales - Enregistrer une vente
-router.post('/', async (req, res) => {
+// POST : Enregistrer une vente
+router.post('/', verifyToken, async (req, res) => {
   const { product_id, quantity, payment_method } = req.body;
 
   try {
-    // 1. Vérifier que le produit existe
-    const result = await db.query('SELECT price, stock FROM products WHERE id = $1', [product_id]);
+    // Vérifier que le produit appartient à l’utilisateur
+    const result = await db.query(
+      'SELECT price, stock FROM products WHERE id = $1 AND user_id = $2',
+      [product_id, req.user.id]
+    );
     const product = result.rows[0];
-
-    if (!product) {
-      return res.status(404).json({ error: 'Produit introuvable' });
-    }
+    if (!product) return res.status(404).json({ error: 'Produit introuvable ou non autorisé' });
 
     if (product.stock < quantity) {
       return res.status(400).json({ error: 'Stock insuffisant' });
@@ -39,16 +40,16 @@ router.post('/', async (req, res) => {
 
     const total = product.price * quantity;
 
-    // 2. Enregistrer la vente
+    // Enregistrer la vente
     await db.query(
-      'INSERT INTO sales (product_id, quantity, total, payment_method) VALUES ($1, $2, $3, $4)',
-      [product_id, quantity, total, payment_method]
+      'INSERT INTO sales (product_id, quantity, total, payment_method, user_id) VALUES ($1, $2, $3, $4, $5)',
+      [product_id, quantity, total, payment_method, req.user.id]
     );
 
-    // 3. Mettre à jour le stock
+    // Mettre à jour le stock
     await db.query(
-      'UPDATE products SET stock = stock - $1 WHERE id = $2',
-      [quantity, product_id]
+      'UPDATE products SET stock = stock - $1 WHERE id = $2 AND user_id = $3',
+      [quantity, product_id, req.user.id]
     );
 
     res.status(201).json({ message: 'Vente enregistrée avec succès' });
@@ -57,21 +58,22 @@ router.post('/', async (req, res) => {
     res.status(500).json({ error: 'Erreur lors de l’enregistrement de la vente' });
   }
 });
-// Modifier une vente
-router.put('/:id', verifyToken, async (req, res) => {
-    const { id } = req.params;
-    const { total, paiement } = req.body;
-    
-    // Ici : mise à jour dans ta base (exemple fictif)
-    res.json({ message: `Vente ${id} modifiée`, total, paiement });
-});
 
-// Annuler une vente
+// DELETE : Annuler une vente utilisateur
 router.delete('/:id', verifyToken, async (req, res) => {
-    const { id } = req.params;
-    
-    // Ici : suppression dans ta base (exemple fictif)
-    res.json({ message: `Vente ${id} annulée` });
+  try {
+    const result = await db.query(
+      'DELETE FROM sales WHERE id = $1 AND user_id = $2 RETURNING *',
+      [req.params.id, req.user.id]
+    );
+    if (result.rowCount === 0) {
+      return res.status(404).json({ error: 'Vente introuvable ou non autorisée' });
+    }
+    res.json({ message: 'Vente annulée' });
+  } catch (err) {
+    console.error('Erreur annulation vente :', err);
+    res.status(500).json({ error: 'Erreur serveur' });
+  }
 });
 
 module.exports = router;
