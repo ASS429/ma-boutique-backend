@@ -21,14 +21,23 @@ router.get('/', async (req, res) => {
 // POST /products : Ajoute un produit
 router.post('/', async (req, res) => {
   try {
-    const { name, category_id, scent, price, stock, price_achat } = req.body;
-const result = await db.query(
-  `INSERT INTO products (name, category_id, scent, price, stock, price_achat)
-   VALUES ($1, $2, $3, $4, $5, $6)
-   RETURNING *`,
-  [name, category_id, scent, price, stock, price_achat]
-);
+    console.log('📩 POST /products reçu :', req.body); // ✅ Log complet
 
+    const { name, category_id, scent, price, stock, price_achat } = req.body;
+
+    const result = await db.query(
+      `INSERT INTO products (name, category_id, scent, price, stock, price_achat)
+       VALUES ($1, $2, $3, $4, $5, $6)
+       RETURNING *`,
+      [
+        name,
+        category_id,
+        scent,
+        Number.isFinite(+price) ? +price : 0,
+        Number.isFinite(+stock) ? +stock : 0,
+        Number.isFinite(+price_achat) ? +price_achat : 0
+      ]
+    );
 
     res.status(201).json(result.rows[0]);
   } catch (err) {
@@ -37,9 +46,12 @@ const result = await db.query(
   }
 });
 
+
 // PATCH /products/:id : Met à jour un ou plusieurs champs
 router.patch('/:id', async (req, res) => {
   try {
+    console.log('📩 PATCH /products reçu :', req.body); // ✅ Log complet
+
     const fields = ['name', 'category_id', 'scent', 'price', 'stock', 'price_achat'];
     const set = [];
     const values = [];
@@ -47,10 +59,8 @@ router.patch('/:id', async (req, res) => {
 
     for (const f of fields) {
       if (req.body.hasOwnProperty(f)) {
-        // Normalisation des numériques
         if (['price', 'stock', 'price_achat', 'category_id'].includes(f)) {
-          const val = Number.isFinite(+req.body[f]) ? +req.body[f] : 0;
-          values.push(val);
+          values.push(Number.isFinite(+req.body[f]) ? +req.body[f] : 0);
         } else {
           values.push(req.body[f]);
         }
