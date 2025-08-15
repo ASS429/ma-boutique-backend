@@ -36,6 +36,49 @@ router.post('/', async (req, res) => {
   }
 });
 
+// PATCH /products/:id : Met à jour un ou plusieurs champs
+router.patch('/:id', async (req, res) => {
+  try {
+    const fields = ['name', 'category_id', 'scent', 'price', 'stock', 'price_achat'];
+    const set = [];
+    const values = [];
+    let i = 1;
+
+    for (const f of fields) {
+      if (req.body.hasOwnProperty(f)) {
+        // Normalisation des numériques
+        if (['price', 'stock', 'price_achat', 'category_id'].includes(f)) {
+          values.push(Number.isFinite(+req.body[f]) ? +req.body[f] : 0);
+        } else {
+          values.push(req.body[f]);
+        }
+        set.push(`${f} = $${i++}`);
+      }
+    }
+
+    if (set.length === 0) {
+      return res.status(400).json({ error: 'Aucun champ à mettre à jour.' });
+    }
+
+    values.push(req.params.id);
+    const result = await db.query(
+      `UPDATE products SET ${set.join(', ')}
+       WHERE id = $${i}
+       RETURNING *`,
+      values
+    );
+
+    if (result.rows.length === 0) {
+      return res.status(404).json({ error: 'Produit introuvable.' });
+    }
+
+    res.json(result.rows[0]);
+  } catch (err) {
+    console.error('Erreur PATCH /products/:id:', err);
+    res.status(500).json({ error: 'Erreur serveur' });
+  }
+});
+
 // DELETE /products/:id : Supprime un produit
 router.delete('/:id', async (req, res) => {
   try {
