@@ -2,7 +2,7 @@
 const express = require('express');
 const router = express.Router();
 const db = require('../db');
-const authMiddleware = require('../middlewares/auth');
+const verifyToken = require('../middleware/auth');
 
 // GET /products : Liste tous les produits avec leur catégorie
 router.get('/', async (req, res) => {
@@ -20,13 +20,13 @@ router.get('/', async (req, res) => {
 
 
 // POST /products : Ajoute un produit
-router.post('/', authMiddleware, async (req, res) => {
+router.post('/', verifyToken, async (req, res) => {
   try {
     console.log('📩 POST /products reçu :', req.body);
     console.log('👤 Utilisateur connecté :', req.user);
 
     const { name, category_id, scent, price, stock, price_achat } = req.body;
-    const userId = req.user.id; // vient du JWT
+    const userId = req.user.id;
 
     const result = await db.query(
       `INSERT INTO products (name, category_id, scent, price, stock, price_achat, user_id)
