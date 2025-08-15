@@ -4,13 +4,16 @@ const router = express.Router();
 const db = require('../db');
 const verifyToken = require('../middleware/auth');
 
-// GET /products : Liste tous les produits avec leur catégorie
-router.get('/', async (req, res) => {
+// GET /products : Liste uniquement les produits de l'utilisateur connecté
+router.get('/', verifyToken, async (req, res) => {
   try {
-    const result = await db.query('SELECT * FROM products ORDER BY id DESC');
+    const userId = req.user.id;
+    const result = await db.query(
+      'SELECT * FROM products WHERE user_id = $1 ORDER BY id DESC',
+      [userId]
+    );
 
-    console.log('📤 GET /products renvoie :', result.rows); // ✅ Log complet
-
+    console.log('📤 GET /products renvoie :', result.rows);
     res.json(result.rows);
   } catch (err) {
     console.error('Erreur GET /products:', err);
@@ -18,8 +21,7 @@ router.get('/', async (req, res) => {
   }
 });
 
-
-// POST /products : Ajoute un produit
+// POST /products : Ajoute un produit lié à l'utilisateur connecté
 router.post('/', verifyToken, async (req, res) => {
   try {
     console.log('📩 POST /products reçu :', req.body);
@@ -50,11 +52,10 @@ router.post('/', verifyToken, async (req, res) => {
   }
 });
 
-
-// PATCH /products/:id : Met à jour un ou plusieurs champs
-router.patch('/:id', async (req, res) => {
+// PATCH /products/:id : Met à jour uniquement les produits appartenant à l'utilisateur
+router.patch('/:id', verifyToken, async (req, res) => {
   try {
-    console.log('📩 PATCH /products reçu :', req.body); // ✅ Log complet
+    console.log('📩 PATCH /products reçu :', req.body);
 
     const fields = ['name', 'category_id', 'scent', 'price', 'stock', 'price_achat'];
     const set = [];
@@ -76,16 +77,19 @@ router.patch('/:id', async (req, res) => {
       return res.status(400).json({ error: 'Aucun champ à mettre à jour.' });
     }
 
+    // Ajout du filtre par user_id pour sécuriser la modification
     values.push(req.params.id);
+    values.push(req.user.id);
+
     const result = await db.query(
       `UPDATE products SET ${set.join(', ')}
-       WHERE id = $${i}
+       WHERE id = $${i++} AND user_id = $${i}
        RETURNING *`,
       values
     );
 
     if (result.rows.length === 0) {
-      return res.status(404).json({ error: 'Produit introuvable.' });
+      return res.status(404).json({ error: 'Produit introuvable ou non autorisé.' });
     }
 
     res.json(result.rows[0]);
@@ -95,11 +99,18 @@ router.patch('/:id', async (req, res) => {
   }
 });
 
-
-// DELETE /products/:id : Supprime un produit
-router.delete('/:id', async (req, res) => {
+// DELETE /products/:id : Supprime uniquement les produits appartenant à l'utilisateur
+router.delete('/:id', verifyToken, async (req, res) => {
   try {
-    await db.query('DELETE FROM products WHERE id = $1', [req.params.id]);
+    const result = await db.query(
+      'DELETE FROM products WHERE id = $1 AND user_id = $2 RETURNING *',
+      [req.params.id, req.user.id]
+    );
+
+    if (result.rows.length === 0) {
+      return res.status(404).json({ error: 'Produit introuvable ou non autorisé.' });
+    }
+
     res.json({ message: 'Produit supprimé' });
   } catch (err) {
     console.error('Erreur DELETE /products/:id:', err);
