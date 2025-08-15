@@ -1,9 +1,10 @@
 const express = require('express');
 const router = express.Router();
-const db = require('../db'); // ton fichier de connexion à la base
+const db = require('../db');
+const verifyToken = require('../middleware/auth');
 
-// 1. Ventes par catégorie
-router.get('/ventes-par-categorie', async (req, res) => {
+// Ventes par catégorie
+router.get('/ventes-par-categorie', verifyToken, async (req, res) => {
   try {
     const { rows } = await db.query(`
       SELECT c.name AS categorie,
@@ -12,9 +13,10 @@ router.get('/ventes-par-categorie', async (req, res) => {
       FROM sales s
       JOIN products p ON s.product_id = p.id
       JOIN categories c ON p.category_id = c.id
+      WHERE s.user_id = $1
       GROUP BY c.name
       ORDER BY total_quantite DESC
-    `);
+    `, [req.user.id]);
     res.json(rows);
   } catch (err) {
     console.error(err);
@@ -22,8 +24,8 @@ router.get('/ventes-par-categorie', async (req, res) => {
   }
 });
 
-// 2. Ventes par jour (historique complet, avec CA et quantité)
-router.get('/ventes-par-jour', async (req, res) => {
+// Ventes par jour
+router.get('/ventes-par-jour', verifyToken, async (req, res) => {
   try {
     const { rows } = await db.query(`
       SELECT DATE(s.created_at) AS date,
@@ -31,10 +33,10 @@ router.get('/ventes-par-jour', async (req, res) => {
              SUM(s.quantity * p.price) AS total_montant
       FROM sales s
       JOIN products p ON s.product_id = p.id
+      WHERE s.user_id = $1
       GROUP BY DATE(s.created_at)
       ORDER BY date ASC
-    `);
-
+    `, [req.user.id]);
     res.json(rows);
   } catch (err) {
     console.error(err);
@@ -42,9 +44,8 @@ router.get('/ventes-par-jour', async (req, res) => {
   }
 });
 
-
-// 3. Répartition paiements
-router.get('/paiements', async (req, res) => {
+// Répartition paiements
+router.get('/paiements', verifyToken, async (req, res) => {
   try {
     const { rows } = await db.query(`
       SELECT s.payment_method,
@@ -52,8 +53,9 @@ router.get('/paiements', async (req, res) => {
              SUM(s.quantity * p.price) AS total_montant
       FROM sales s
       JOIN products p ON s.product_id = p.id
+      WHERE s.user_id = $1
       GROUP BY s.payment_method
-    `);
+    `, [req.user.id]);
     res.json(rows);
   } catch (err) {
     console.error(err);
@@ -61,8 +63,8 @@ router.get('/paiements', async (req, res) => {
   }
 });
 
-// 4. Top produits
-router.get('/top-produits', async (req, res) => {
+// Top produits
+router.get('/top-produits', verifyToken, async (req, res) => {
   try {
     const { rows } = await db.query(`
       SELECT p.name AS produit,
@@ -70,10 +72,11 @@ router.get('/top-produits', async (req, res) => {
              SUM(s.quantity * p.price) AS total_montant
       FROM sales s
       JOIN products p ON s.product_id = p.id
+      WHERE s.user_id = $1
       GROUP BY p.name
       ORDER BY total_quantite DESC
       LIMIT 10
-    `);
+    `, [req.user.id]);
     res.json(rows);
   } catch (err) {
     console.error(err);
@@ -81,8 +84,8 @@ router.get('/top-produits', async (req, res) => {
   }
 });
 
-// 5. Stock faible
-router.get('/stock-faible', async (req, res) => {
+// Stock faible
+router.get('/stock-faible', verifyToken, async (req, res) => {
   try {
     const seuil = parseInt(req.query.seuil) || 5;
     const { rows } = await db.query(`
@@ -90,8 +93,9 @@ router.get('/stock-faible', async (req, res) => {
              p.stock
       FROM products p
       WHERE p.stock <= $1
+        AND p.user_id = $2
       ORDER BY p.stock ASC
-    `, [seuil]);
+    `, [seuil, req.user.id]);
     res.json(rows);
   } catch (err) {
     console.error(err);
