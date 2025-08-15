@@ -6,17 +6,17 @@ const db = require('../db');
 // GET /products : Liste tous les produits avec leur catégorie
 router.get('/', async (req, res) => {
   try {
-    const result = await db.query(`
-  SELECT *
-  FROM products
-  ORDER BY id DESC
-`);
+    const result = await db.query('SELECT * FROM products ORDER BY id DESC');
+
+    console.log('📤 GET /products renvoie :', result.rows); // ✅ Log complet
+
     res.json(result.rows);
   } catch (err) {
     console.error('Erreur GET /products:', err);
     res.status(500).json({ error: 'Erreur serveur' });
   }
 });
+
 
 // POST /products : Ajoute un produit
 router.post('/', async (req, res) => {
