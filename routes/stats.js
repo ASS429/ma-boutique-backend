@@ -5,6 +5,7 @@ const verifyToken = require('../middleware/auth');
 
 // Ventes par catégorie
 router.get('/ventes-par-categorie', verifyToken, async (req, res) => {
+  console.log("👤 Utilisateur authentifié:", req.user);
   try {
     const { rows } = await db.query(`
       SELECT c.name AS categorie,
