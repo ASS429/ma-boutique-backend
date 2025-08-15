@@ -3,6 +3,7 @@ const router = express.Router();
 const db = require('../db');
 
 router.get('/', async (req, res) => {
+  console.log("👤 Utilisateur authentifié:", req.user);
   const result = await db.query('SELECT * FROM tontines ORDER BY created_date DESC');
   res.json(result.rows);
 });
