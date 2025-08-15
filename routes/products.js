@@ -49,7 +49,8 @@ router.patch('/:id', async (req, res) => {
       if (req.body.hasOwnProperty(f)) {
         // Normalisation des numériques
         if (['price', 'stock', 'price_achat', 'category_id'].includes(f)) {
-          values.push(Number.isFinite(+req.body[f]) ? +req.body[f] : 0);
+          const val = Number.isFinite(+req.body[f]) ? +req.body[f] : 0;
+          values.push(val);
         } else {
           values.push(req.body[f]);
         }
@@ -79,6 +80,7 @@ router.patch('/:id', async (req, res) => {
     res.status(500).json({ error: 'Erreur serveur' });
   }
 });
+
 
 // DELETE /products/:id : Supprime un produit
 router.delete('/:id', async (req, res) => {
