@@ -5,6 +5,7 @@ const verifyToken = require('../middleware/auth');
 
 // GET : Liste catégories utilisateur
 router.get('/', verifyToken, async (req, res) => {
+  console.log("👤 Utilisateur authentifié:", req.user);
   try {
     const result = await db.query(
       'SELECT * FROM categories WHERE user_id = $1 ORDER BY id',
