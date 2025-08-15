@@ -1,10 +1,15 @@
 const express = require('express');
 const router = express.Router();
 const db = require('../db');
+const verifyToken = require('../middleware/auth');
 
-router.get('/', async (req, res) => {
+// GET : Liste catégories utilisateur
+router.get('/', verifyToken, async (req, res) => {
   try {
-    const result = await db.query('SELECT * FROM categories ORDER BY id');
+    const result = await db.query(
+      'SELECT * FROM categories WHERE user_id = $1 ORDER BY id',
+      [req.user.id]
+    );
     res.json(result.rows);
   } catch (err) {
     console.error('Erreur lors de la récupération des catégories:', err.message);
@@ -12,17 +17,17 @@ router.get('/', async (req, res) => {
   }
 });
 
-router.post('/', async (req, res) => {
+// POST : Créer catégorie
+router.post('/', verifyToken, async (req, res) => {
   try {
     const { name } = req.body;
-
     if (!name || name.trim() === '') {
       return res.status(400).json({ error: 'Le nom de la catégorie est requis' });
     }
 
     const result = await db.query(
-      'INSERT INTO categories (name) VALUES ($1) RETURNING *',
-      [name.trim()]
+      'INSERT INTO categories (name, user_id) VALUES ($1, $2) RETURNING *',
+      [name.trim(), req.user.id]
     );
 
     res.status(201).json(result.rows[0]);
@@ -32,36 +37,37 @@ router.post('/', async (req, res) => {
   }
 });
 
-router.delete('/:id', async (req, res) => {
+// DELETE : Supprimer catégorie utilisateur
+router.delete('/:id', verifyToken, async (req, res) => {
   try {
     const id = parseInt(req.params.id, 10);
+    if (isNaN(id)) return res.status(400).json({ error: 'ID invalide' });
 
-    if (isNaN(id)) {
-      return res.status(400).json({ error: 'ID invalide' });
-    }
-
-    // Vérifier si la catégorie existe
-    const catCheck = await db.query('SELECT * FROM categories WHERE id = $1', [id]);
+    // Vérifier si la catégorie appartient à l’utilisateur
+    const catCheck = await db.query(
+      'SELECT * FROM categories WHERE id = $1 AND user_id = $2',
+      [id, req.user.id]
+    );
     if (catCheck.rowCount === 0) {
-      return res.status(404).json({ error: 'Catégorie non trouvée' });
+      return res.status(404).json({ error: 'Catégorie non trouvée ou non autorisée' });
     }
 
-    // Vérifier s'il y a des produits liés à cette catégorie
-    const prodCheck = await db.query('SELECT COUNT(*) FROM products WHERE category_id = $1', [id]);
+    // Vérifier s'il y a des produits liés
+    const prodCheck = await db.query(
+      'SELECT COUNT(*) FROM products WHERE category_id = $1 AND user_id = $2',
+      [id, req.user.id]
+    );
     if (parseInt(prodCheck.rows[0].count, 10) > 0) {
-      return res.status(400).json({ error: 'Impossible de supprimer : la catégorie contient encore des produits.' });
+      return res.status(400).json({ error: 'Impossible de supprimer : catégorie avec produits.' });
     }
 
-    // Supprimer la catégorie
-    await db.query('DELETE FROM categories WHERE id = $1', [id]);
-
+    // Supprimer
+    await db.query('DELETE FROM categories WHERE id = $1 AND user_id = $2', [id, req.user.id]);
     res.json({ success: true, message: 'Catégorie supprimée avec succès' });
   } catch (err) {
     console.error('Erreur DELETE /categories/:id:', err.message);
     res.status(500).json({ error: 'Erreur serveur' });
   }
 });
-
-
 
 module.exports = router;
