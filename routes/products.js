@@ -21,13 +21,14 @@ router.get('/', async (req, res) => {
 // POST /products : Ajoute un produit
 router.post('/', async (req, res) => {
   try {
-    const { name, category_id, scent, price, stock } = req.body;
+    const { name, category_id, scent, price, stock, price_achat } = req.body;
+const result = await db.query(
+  `INSERT INTO products (name, category_id, scent, price, stock, price_achat)
+   VALUES ($1, $2, $3, $4, $5, $6)
+   RETURNING *`,
+  [name, category_id, scent, price, stock, price_achat]
+);
 
-    const result = await db.query(
-      `INSERT INTO products (name, category_id, scent, price, stock)
-       VALUES ($1, $2, $3, $4, $5) RETURNING *`,
-      [name, category_id, scent, price, stock]
-    );
 
     res.status(201).json(result.rows[0]);
   } catch (err) {
