@@ -21,6 +21,70 @@ router.get('/', verifyToken, async (req, res) => {
     res.status(500).json({ error: 'Erreur serveur' });
   }
 });
+// PATCH : Modifier une vente (ex: quantité ou mode de paiement)
+router.patch('/:id', verifyToken, async (req, res) => {
+  const id = parseInt(req.params.id, 10);
+  const { quantity, payment_method } = req.body;
+
+  try {
+    // Vérifier que la vente existe et appartient à l’utilisateur
+    const venteResult = await db.query(
+      'SELECT * FROM sales WHERE id = $1 AND user_id = $2',
+      [id, req.user.id]
+    );
+    if (venteResult.rowCount === 0) {
+      return res.status(404).json({ error: 'Vente introuvable ou non autorisée' });
+    }
+    const vente = venteResult.rows[0];
+
+    // Si quantité changée → recalculer total + ajuster stock
+    if (quantity && quantity !== vente.quantity) {
+      // Récupérer le produit lié
+      const productResult = await db.query(
+        'SELECT price, stock FROM products WHERE id = $1 AND user_id = $2',
+        [vente.product_id, req.user.id]
+      );
+      const product = productResult.rows[0];
+      if (!product) {
+        return res.status(404).json({ error: 'Produit introuvable' });
+      }
+
+      const diff = quantity - vente.quantity; // différence de quantité
+      if (product.stock < diff) {
+        return res.status(400).json({ error: 'Stock insuffisant pour augmenter la quantité' });
+      }
+
+      // Mettre à jour la vente
+      await db.query(
+        'UPDATE sales SET quantity = $1, total = $2, payment_method = COALESCE($3, payment_method) WHERE id = $4 AND user_id = $5',
+        [quantity, product.price * quantity, payment_method, id, req.user.id]
+      );
+
+      // Ajuster le stock
+      await db.query(
+        'UPDATE products SET stock = stock - $1 WHERE id = $2 AND user_id = $3',
+        [diff, vente.product_id, req.user.id]
+      );
+    } else if (payment_method) {
+      // Mise à jour uniquement du mode de paiement
+      await db.query(
+        'UPDATE sales SET payment_method = $1 WHERE id = $2 AND user_id = $3',
+        [payment_method, id, req.user.id]
+      );
+    }
+
+    const updated = await db.query(
+      'SELECT * FROM sales WHERE id = $1 AND user_id = $2',
+      [id, req.user.id]
+    );
+
+    res.json(updated.rows[0]);
+
+  } catch (err) {
+    console.error('Erreur PATCH /sales/:id:', err);
+    res.status(500).json({ error: 'Erreur serveur' });
+  }
+});
 
 // POST : Enregistrer une vente
 router.post('/', verifyToken, async (req, res) => {
