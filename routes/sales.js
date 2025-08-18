@@ -59,10 +59,10 @@ router.post('/', verifyToken, async (req, res) => {
 });
 
 
-// ✅ PATCH modifier une vente (quantité, méthode paiement, statut payé)
+// ✅ PATCH modifier une vente (quantité, paiement, remboursement)
 router.patch('/:id', verifyToken, async (req, res) => {
   const id = parseInt(req.params.id, 10);
-  const { quantity, payment_method, paid } = req.body;
+  const { quantity, payment_method, paid, repayment_method } = req.body;
 
   try {
     const venteResult = await db.query(
@@ -75,7 +75,7 @@ router.patch('/:id', verifyToken, async (req, res) => {
 
     const vente = venteResult.rows[0];
 
-    // ✅ Mise à jour de la quantité
+    // ✅ Cas 1 : modification de la quantité
     if (quantity && quantity !== vente.quantity) {
       const productResult = await db.query(
         'SELECT price, stock FROM products WHERE id = $1 AND user_id = $2',
@@ -89,9 +89,12 @@ router.patch('/:id', verifyToken, async (req, res) => {
 
       await db.query(
         `UPDATE sales 
-         SET quantity = $1, total = $2, payment_method = COALESCE($3, payment_method), paid = COALESCE($4, paid)
-         WHERE id = $5 AND user_id = $6`,
-        [quantity, product.price * quantity, payment_method, paid, id, req.user.id]
+         SET quantity = $1, total = $2, 
+             payment_method = COALESCE($3, payment_method), 
+             paid = COALESCE($4, paid),
+             repayment_method = COALESCE($5, repayment_method)
+         WHERE id = $6 AND user_id = $7`,
+        [quantity, product.price * quantity, payment_method, paid, repayment_method, id, req.user.id]
       );
 
       await db.query(
@@ -99,12 +102,14 @@ router.patch('/:id', verifyToken, async (req, res) => {
         [diff, vente.product_id, req.user.id]
       );
     } else {
-      // ✅ Mise à jour simple (méthode paiement / statut payé)
+      // ✅ Cas 2 : simple mise à jour paiement/remboursement
       await db.query(
         `UPDATE sales 
-         SET payment_method = COALESCE($1, payment_method), paid = COALESCE($2, paid)
-         WHERE id = $3 AND user_id = $4`,
-        [payment_method, paid, id, req.user.id]
+         SET payment_method = COALESCE($1, payment_method), 
+             paid = COALESCE($2, paid),
+             repayment_method = COALESCE($3, repayment_method)
+         WHERE id = $4 AND user_id = $5`,
+        [payment_method, paid, repayment_method, id, req.user.id]
       );
     }
 
@@ -120,6 +125,7 @@ router.patch('/:id', verifyToken, async (req, res) => {
     res.status(500).json({ error: 'Erreur serveur' });
   }
 });
+
 
 
 // ✅ DELETE annuler une vente
