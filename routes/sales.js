@@ -40,18 +40,22 @@ router.post('/', verifyToken, async (req, res) => {
     const paid = (payment_method === "credit") ? false : true;
 
     await db.query(
-      `INSERT INTO sales 
-        (product_id, quantity, total, payment_method, user_id, client_name, client_phone, due_date, paid) 
-       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9)`,
-      [product_id, quantity, total, payment_method, req.user.id, client_name || null, client_phone || null, due_date || null, paid]
-    );
+  `INSERT INTO sales 
+    (product_id, quantity, total, payment_method, user_id, client_name, client_phone, due_date, paid) 
+   VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9)
+   RETURNING *`,
+  [product_id, quantity, total, payment_method, req.user.id, client_name || null, client_phone || null, due_date || null, paid]
+);
 
-    await db.query(
-      'UPDATE products SET stock = stock - $1 WHERE id = $2 AND user_id = $3',
-      [quantity, product_id, req.user.id]
-    );
+const newSale = result.rows[0];
 
-    res.status(201).json({ message: 'Vente enregistrée' });
+await db.query(
+  'UPDATE products SET stock = stock - $1 WHERE id = $2 AND user_id = $3',
+  [quantity, product_id, req.user.id]
+);
+
+res.status(201).json(newSale);  // ✅ renvoie la vente complète
+
   } catch (err) {
     console.error("Erreur POST /sales :", err);
     res.status(500).json({ error: 'Erreur serveur' });
