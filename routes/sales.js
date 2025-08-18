@@ -21,9 +21,10 @@ router.get('/', verifyToken, async (req, res) => {
   }
 });
 
-// ✅ POST nouvelle vente
+// ✅ POST nouvelle vente (gère aussi le crédit)
 router.post('/', verifyToken, async (req, res) => {
-  const { product_id, quantity, payment_method } = req.body;
+  const { product_id, quantity, payment_method, client_name, client_phone, due_date } = req.body;
+
   try {
     const result = await db.query(
       'SELECT price, stock FROM products WHERE id = $1 AND user_id = $2',
@@ -34,10 +35,17 @@ router.post('/', verifyToken, async (req, res) => {
     if (product.stock < quantity) return res.status(400).json({ error: 'Stock insuffisant' });
 
     const total = product.price * quantity;
+
+    // ✅ payé immédiatement sauf si crédit
+    const paid = (payment_method === "credit") ? false : true;
+
     await db.query(
-      'INSERT INTO sales (product_id, quantity, total, payment_method, user_id) VALUES ($1,$2,$3,$4,$5)',
-      [product_id, quantity, total, payment_method, req.user.id]
+      `INSERT INTO sales 
+        (product_id, quantity, total, payment_method, user_id, client_name, client_phone, due_date, paid) 
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9)`,
+      [product_id, quantity, total, payment_method, req.user.id, client_name || null, client_phone || null, due_date || null, paid]
     );
+
     await db.query(
       'UPDATE products SET stock = stock - $1 WHERE id = $2 AND user_id = $3',
       [quantity, product_id, req.user.id]
@@ -49,6 +57,7 @@ router.post('/', verifyToken, async (req, res) => {
     res.status(500).json({ error: 'Erreur serveur' });
   }
 });
+
 
 // ✅ PATCH modifier une vente
 router.patch('/:id', verifyToken, async (req, res) => {
