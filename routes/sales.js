@@ -59,10 +59,10 @@ router.post('/', verifyToken, async (req, res) => {
 });
 
 
-// ✅ PATCH modifier une vente
+// ✅ PATCH modifier une vente (incluant crédits)
 router.patch('/:id', verifyToken, async (req, res) => {
   const id = parseInt(req.params.id, 10);
-  const { quantity, payment_method } = req.body;
+  const { quantity, payment_method, client_name, client_phone, due_date, paid } = req.body;
 
   try {
     const venteResult = await db.query(
@@ -72,6 +72,7 @@ router.patch('/:id', verifyToken, async (req, res) => {
     if (venteResult.rowCount === 0) return res.status(404).json({ error: 'Vente introuvable' });
     const vente = venteResult.rows[0];
 
+    // --- Si modification de la quantité ---
     if (quantity && quantity !== vente.quantity) {
       const productResult = await db.query(
         'SELECT price, stock FROM products WHERE id = $1 AND user_id = $2',
@@ -84,20 +85,55 @@ router.patch('/:id', verifyToken, async (req, res) => {
       if (product.stock < diff) return res.status(400).json({ error: 'Stock insuffisant' });
 
       await db.query(
-        'UPDATE sales SET quantity = $1, total = $2, payment_method = COALESCE($3, payment_method) WHERE id = $4 AND user_id = $5',
-        [quantity, product.price * quantity, payment_method, id, req.user.id]
+        `UPDATE sales 
+         SET quantity = $1, total = $2, 
+             payment_method = COALESCE($3, payment_method),
+             client_name = COALESCE($4, client_name),
+             client_phone = COALESCE($5, client_phone),
+             due_date = COALESCE($6, due_date),
+             paid = COALESCE($7, paid, false)
+         WHERE id = $8 AND user_id = $9`,
+        [
+          quantity,
+          product.price * quantity,
+          payment_method,
+          client_name,
+          client_phone,
+          due_date,
+          paid,
+          id,
+          req.user.id
+        ]
       );
+
       await db.query(
         'UPDATE products SET stock = stock - $1 WHERE id = $2 AND user_id = $3',
         [diff, vente.product_id, req.user.id]
       );
-    } else if (payment_method) {
+
+    } else {
+      // --- Sinon, mise à jour des champs simples (paiement, crédit, etc.) ---
       await db.query(
-        'UPDATE sales SET payment_method = $1 WHERE id = $2 AND user_id = $3',
-        [payment_method, id, req.user.id]
+        `UPDATE sales 
+         SET payment_method = COALESCE($1, payment_method),
+             client_name = COALESCE($2, client_name),
+             client_phone = COALESCE($3, client_phone),
+             due_date = COALESCE($4, due_date),
+             paid = COALESCE($5, paid, false)
+         WHERE id = $6 AND user_id = $7`,
+        [
+          payment_method,
+          client_name,
+          client_phone,
+          due_date,
+          paid,
+          id,
+          req.user.id
+        ]
       );
     }
 
+    // --- Retourner la vente modifiée ---
     const updated = await db.query(
       'SELECT * FROM sales WHERE id = $1 AND user_id = $2',
       [id, req.user.id]
@@ -109,6 +145,7 @@ router.patch('/:id', verifyToken, async (req, res) => {
     res.status(500).json({ error: 'Erreur serveur' });
   }
 });
+
 
 // ✅ DELETE annuler une vente
 router.delete('/:id', verifyToken, async (req, res) => {
