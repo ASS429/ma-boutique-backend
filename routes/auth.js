@@ -8,7 +8,7 @@ const pool = require("../db");
 //   Inscription
 // ==========================
 router.post("/register", async (req, res) => {
-    const { username, password } = req.body;
+    const { username, password, company_name } = req.body; // <-- on accepte aussi company_name
 
     if (!username || !password) {
         return res.status(400).json({
@@ -31,8 +31,8 @@ router.post("/register", async (req, res) => {
 
         const hashedPassword = await bcrypt.hash(password, 10);
         const result = await pool.query(
-            "INSERT INTO users (username, password) VALUES ($1, $2) RETURNING id, username",
-            [username, hashedPassword]
+            "INSERT INTO users (username, password, company_name) VALUES ($1, $2, $3) RETURNING id, username, company_name",
+            [username, hashedPassword, company_name || null]
         );
 
         res.status(201).json({
@@ -48,7 +48,6 @@ router.post("/register", async (req, res) => {
         });
     }
 });
-
 
 // ==========================
 //   Connexion
@@ -105,11 +104,32 @@ function authenticateToken(req, res, next) {
 }
 
 // ==========================
+//   Endpoint /me
+// ==========================
+router.get("/me", authenticateToken, async (req, res) => {
+    try {
+        const result = await pool.query(
+            "SELECT id, username, company_name FROM users WHERE id = $1",
+            [req.user.id]
+        );
+
+        if (result.rows.length === 0) {
+            return res.status(404).json({ error: "Utilisateur introuvable" });
+        }
+
+        res.json(result.rows[0]);
+    } catch (err) {
+        console.error("❌ Erreur lors de la récupération de l'utilisateur :", err);
+        res.status(500).json({ error: err.message });
+    }
+});
+
+// ==========================
 //   Liste des utilisateurs
 // ==========================
 router.get("/users", authenticateToken, async (req, res) => {
     try {
-        const result = await pool.query("SELECT id, username FROM users");
+        const result = await pool.query("SELECT id, username, company_name FROM users");
         res.json(result.rows);
     } catch (err) {
         console.error("❌ Erreur lors de la récupération des utilisateurs :", err);
