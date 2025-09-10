@@ -5,50 +5,77 @@ const jwt = require("jsonwebtoken");
 const pool = require("../db");
 
 // ==========================
-//   Inscription
+//   Inscription (Admin ou public)
 // ==========================
 router.post("/register", async (req, res) => {
-    const { username, password } = req.body;
+  const {
+    username,
+    password,
+    company_name,
+    role = "user",
+    status = "Actif",
+    plan = "Free",
+    payment_status = "À jour",
+    payment_method,
+    expiration,
+    amount = 0.00
+  } = req.body;
 
-    if (!username || !password) {
-        return res.status(400).json({
-            error: "Champs manquants",
-            details: "Le champ 'username' ou 'password' est vide."
-        });
+  if (!username || !password) {
+    return res.status(400).json({
+      error: "Champs manquants",
+      details: "Le champ 'username' ou 'password' est vide."
+    });
+  }
+
+  try {
+    // Vérifie si l'utilisateur existe déjà
+    const existingUser = await pool.query(
+      "SELECT * FROM users WHERE username = $1",
+      [username]
+    );
+    if (existingUser.rows.length > 0) {
+      return res.status(400).json({
+        error: "Utilisateur déjà existant",
+        details: `Le nom d'utilisateur '${username}' est déjà pris.`
+      });
     }
 
-    try {
-        const existingUser = await pool.query(
-            "SELECT * FROM users WHERE username = $1",
-            [username]
-        );
-        if (existingUser.rows.length > 0) {
-            return res.status(400).json({
-                error: "Utilisateur déjà existant",
-                details: `Le nom d'utilisateur '${username}' est déjà pris.`
-            });
-        }
+    // Hash du mot de passe
+    const hashedPassword = await bcrypt.hash(password, 10);
 
-        const hashedPassword = await bcrypt.hash(password, 10);
-        const result = await pool.query(
-            "INSERT INTO users (username, password) VALUES ($1, $2) RETURNING id, username",
-            [username, hashedPassword]
-        );
+    // Insertion avec TOUS les champs
+    const result = await pool.query(
+      `INSERT INTO users 
+        (username, password, company_name, role, status, plan, payment_status, payment_method, expiration, amount) 
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10) 
+       RETURNING id, username, company_name, role, status, plan, payment_status, payment_method, expiration, amount`,
+      [
+        username,
+        hashedPassword,
+        company_name || null,
+        role,
+        status,
+        plan,
+        payment_status,
+        payment_method || null,
+        expiration || null,
+        amount
+      ]
+    );
 
-        res.status(201).json({
-            message: "Compte créé avec succès",
-            user: result.rows[0]
-        });
-
-    } catch (err) {
-        console.error("❌ Erreur lors de l'inscription :", err);
-        res.status(500).json({
-            error: "Erreur serveur",
-            details: err.message || err
-        });
-    }
+    res.status(201).json({
+      message: "Compte créé avec succès",
+      user: result.rows[0]
+    });
+  } catch (err) {
+    console.error("❌ Erreur lors de l'inscription :", err);
+    res.status(500).json({
+      error: "Erreur serveur",
+      details: err.message || err
+    });
+  }
 });
-
 
 // ==========================
 //   Connexion
