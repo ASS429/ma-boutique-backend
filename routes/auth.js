@@ -114,16 +114,100 @@ function authenticateToken(req, res, next) {
 }
 
 // ==========================
+//   Middleware Admin
+// ==========================
+function isAdmin(req, res, next) {
+    if (req.user.role !== "admin") {
+        return res.status(403).json({ error: "Accès réservé aux administrateurs" });
+    }
+    next();
+}
+
+// ==========================
 //   Liste des utilisateurs
 // ==========================
 router.get("/users", authenticateToken, async (req, res) => {
-    try {
-        const result = await pool.query("SELECT id, username, company_name, role FROM users");
-        res.json(result.rows);
-    } catch (err) {
-        console.error("❌ Erreur lors de la récupération des utilisateurs :", err);
-        res.status(500).json({ error: err.message });
-    }
+  try {
+    const result = await pool.query(`
+      SELECT 
+        id, 
+        username, 
+        company_name, 
+        role, 
+        status, 
+        plan, 
+        payment_status, 
+        payment_method, 
+        expiration, 
+        amount
+      FROM users
+    `);
+    res.json(result.rows);
+  } catch (err) {
+    console.error("❌ Erreur lors de la récupération des utilisateurs :", err);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// ==========================
+//   Gestion des utilisateurs (Admin)
+// ==========================
+
+// Bloquer un utilisateur
+router.put("/users/:id/block", authenticateToken, isAdmin, async (req, res) => {
+  try {
+    const result = await pool.query(
+      "UPDATE users SET status = 'Bloqué' WHERE id = $1 RETURNING *",
+      [req.params.id]
+    );
+    if (result.rows.length === 0) return res.status(404).json({ error: "Utilisateur introuvable" });
+    res.json(result.rows[0]);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// Réactiver un utilisateur
+router.put("/users/:id/activate", authenticateToken, isAdmin, async (req, res) => {
+  try {
+    const result = await pool.query(
+      "UPDATE users SET status = 'Actif', payment_status = 'À jour' WHERE id = $1 RETURNING *",
+      [req.params.id]
+    );
+    if (result.rows.length === 0) return res.status(404).json({ error: "Utilisateur introuvable" });
+    res.json(result.rows[0]);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// Supprimer un utilisateur
+router.delete("/users/:id", authenticateToken, isAdmin, async (req, res) => {
+  try {
+    const result = await pool.query(
+      "DELETE FROM users WHERE id = $1 RETURNING *",
+      [req.params.id]
+    );
+    if (result.rows.length === 0) return res.status(404).json({ error: "Utilisateur introuvable" });
+    res.json({ message: "Utilisateur supprimé", user: result.rows[0] });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// Envoyer un rappel (simple log pour l’instant)
+router.post("/users/:id/reminder", authenticateToken, isAdmin, async (req, res) => {
+  try {
+    const user = await pool.query("SELECT username FROM users WHERE id = $1", [req.params.id]);
+    if (user.rows.length === 0) return res.status(404).json({ error: "Utilisateur introuvable" });
+
+    // ⚡ Pour l'instant, juste un log. On branchera un vrai email après.
+    console.log(`📩 Rappel envoyé à ${user.rows[0].username}`);
+
+    res.json({ message: `Rappel envoyé à ${user.rows[0].username}` });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
 });
 
 
