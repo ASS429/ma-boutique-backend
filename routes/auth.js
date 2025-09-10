@@ -118,12 +118,13 @@ function authenticateToken(req, res, next) {
 // ==========================
 router.get("/users", authenticateToken, async (req, res) => {
     try {
-        const result = await pool.query("SELECT id, username FROM users");
+        const result = await pool.query("SELECT id, username, company_name, role FROM users");
         res.json(result.rows);
     } catch (err) {
         console.error("❌ Erreur lors de la récupération des utilisateurs :", err);
         res.status(500).json({ error: err.message });
     }
 });
+
 
 module.exports = router;
