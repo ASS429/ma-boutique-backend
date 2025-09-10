@@ -8,7 +8,7 @@ const pool = require("../db");
 //   Inscription
 // ==========================
 router.post("/register", async (req, res) => {
-    const { username, password, company_name } = req.body; // <-- on accepte aussi company_name
+    const { username, password } = req.body;
 
     if (!username || !password) {
         return res.status(400).json({
@@ -31,8 +31,8 @@ router.post("/register", async (req, res) => {
 
         const hashedPassword = await bcrypt.hash(password, 10);
         const result = await pool.query(
-            "INSERT INTO users (username, password, company_name) VALUES ($1, $2, $3) RETURNING id, username, company_name",
-            [username, hashedPassword, company_name || null]
+            "INSERT INTO users (username, password) VALUES ($1, $2) RETURNING id, username",
+            [username, hashedPassword]
         );
 
         res.status(201).json({
@@ -49,6 +49,7 @@ router.post("/register", async (req, res) => {
     }
 });
 
+
 // ==========================
 //   Connexion
 // ==========================
@@ -60,27 +61,36 @@ router.post("/login", async (req, res) => {
     }
 
     try {
-        const user = await pool.query(
-            "SELECT * FROM users WHERE username = $1",
+        const result = await pool.query(
+            "SELECT id, username, password, role, company_name FROM users WHERE username = $1",
             [username]
         );
 
-        if (user.rows.length === 0) {
+        if (result.rows.length === 0) {
             return res.status(400).json({ error: "Utilisateur introuvable" });
         }
 
-        const validPassword = await bcrypt.compare(password, user.rows[0].password);
+        const user = result.rows[0];
+        const validPassword = await bcrypt.compare(password, user.password);
         if (!validPassword) {
             return res.status(401).json({ error: "Mot de passe incorrect" });
         }
 
         const token = jwt.sign(
-            { id: user.rows[0].id, username: user.rows[0].username },
+            { id: user.id, username: user.username, role: user.role },
             process.env.JWT_SECRET,
             { expiresIn: "1h" }
         );
 
-        res.json({ token });
+        res.json({
+            token,
+            user: {
+                id: user.id,
+                email: user.username,
+                role: user.role,
+                company_name: user.company_name
+            }
+        });
 
     } catch (err) {
         console.error("❌ Erreur lors de la connexion :", err);
@@ -104,32 +114,11 @@ function authenticateToken(req, res, next) {
 }
 
 // ==========================
-//   Endpoint /me
-// ==========================
-router.get("/me", authenticateToken, async (req, res) => {
-    try {
-        const result = await pool.query(
-            "SELECT id, username, company_name FROM users WHERE id = $1",
-            [req.user.id]
-        );
-
-        if (result.rows.length === 0) {
-            return res.status(404).json({ error: "Utilisateur introuvable" });
-        }
-
-        res.json(result.rows[0]);
-    } catch (err) {
-        console.error("❌ Erreur lors de la récupération de l'utilisateur :", err);
-        res.status(500).json({ error: err.message });
-    }
-});
-
-// ==========================
 //   Liste des utilisateurs
 // ==========================
 router.get("/users", authenticateToken, async (req, res) => {
     try {
-        const result = await pool.query("SELECT id, username, company_name FROM users");
+        const result = await pool.query("SELECT id, username FROM users");
         res.json(result.rows);
     } catch (err) {
         console.error("❌ Erreur lors de la récupération des utilisateurs :", err);
