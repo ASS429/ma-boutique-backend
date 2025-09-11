@@ -269,30 +269,32 @@ router.get("/me", authenticateToken, async (req, res) => {
 //   Upgrade vers Premium
 // ==========================
 router.put("/upgrade", authenticateToken, async (req, res) => {
-  const { payment_method, amount, expiration, upgrade_status } = req.body;
-  if (!payment_method || !amount || !expiration) {
+  const { phone, payment_method, amount, expiration, upgrade_status } = req.body;
+
+  if (!phone || !payment_method || !amount || !expiration) {
     return res.status(400).json({ error: "Champs manquants" });
   }
 
   try {
     const result = await pool.query(
       `UPDATE users
-       SET plan = 'Premium',
-           payment_method = $1,
-           amount = $2,
-           expiration = $3,
-           upgrade_status = $4,
+       SET phone = $1,
+           plan = 'Premium',
+           payment_method = $2,
+           amount = $3,
+           expiration = $4,
+           upgrade_status = $5,
            payment_status = 'À jour'
-       WHERE id = $5
-       RETURNING id, username, plan, payment_method, amount, expiration, payment_status, upgrade_status`,
-      [payment_method, amount, expiration, upgrade_status, req.user.id]
+       WHERE id = $6
+       RETURNING id, username, phone, plan, payment_method, amount, expiration, payment_status, upgrade_status`,
+      [phone, payment_method, amount, expiration, upgrade_status, req.user.id]
     );
 
     if (result.rows.length === 0) return res.status(404).json({ error: "Utilisateur introuvable" });
 
     res.json({ message: "Demande d’upgrade enregistrée", user: result.rows[0] });
   } catch (err) {
-    console.error(err);
+    console.error("❌ Erreur upgrade:", err);
     res.status(500).json({ error: err.message });
   }
 });
