@@ -12,13 +12,14 @@ router.post("/register", async (req, res) => {
     username,
     password,
     company_name,
+    phone,
     role = "user",
     status = "Actif",
     plan = "Free",
     payment_status = "À jour",
     payment_method,
     expiration,
-    amount = 0.00
+    amount = 0.0
   } = req.body;
 
   if (!username || !password) {
@@ -47,13 +48,14 @@ router.post("/register", async (req, res) => {
     // Insertion avec TOUS les champs
     const result = await pool.query(
       `INSERT INTO users 
-        (username, password, company_name, role, status, plan, payment_status, payment_method, expiration, amount) 
-       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10) 
-       RETURNING id, username, company_name, role, status, plan, payment_status, payment_method, expiration, amount`,
+        (username, password, company_name, phone, role, status, plan, payment_status, payment_method, expiration, amount) 
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11) 
+       RETURNING id, username, company_name, phone, role, status, plan, payment_status, payment_method, expiration, amount`,
       [
         username,
         hashedPassword,
         company_name || null,
+        phone || null,
         role,
         status,
         plan,
@@ -81,80 +83,79 @@ router.post("/register", async (req, res) => {
 //   Connexion
 // ==========================
 router.post("/login", async (req, res) => {
-    const { username, password } = req.body;
+  const { username, password } = req.body;
 
-    if (!username || !password) {
-        return res.status(400).json({ error: "Champs manquants" });
+  if (!username || !password) {
+    return res.status(400).json({ error: "Champs manquants" });
+  }
+
+  try {
+    const result = await pool.query(
+      "SELECT id, username, password, role, company_name, phone, status FROM users WHERE username = $1",
+      [username]
+    );
+
+    if (result.rows.length === 0) {
+      return res.status(400).json({ error: "Utilisateur introuvable" });
     }
 
-    try {
-        const result = await pool.query(
-            "SELECT id, username, password, role, company_name, status FROM users WHERE username = $1",
-            [username]
-        );
+    const user = result.rows[0];
 
-        if (result.rows.length === 0) {
-            return res.status(400).json({ error: "Utilisateur introuvable" });
-        }
-
-        const user = result.rows[0];
-
-        // 🚫 Vérifier si le compte est bloqué
-        if (user.status === "Bloqué") {
-            return res.status(403).json({ error: "Votre compte est bloqué. Veuillez contacter l’administrateur." });
-        }
-
-        const validPassword = await bcrypt.compare(password, user.password);
-        if (!validPassword) {
-            return res.status(401).json({ error: "Mot de passe incorrect" });
-        }
-
-        const token = jwt.sign(
-            { id: user.id, username: user.username, role: user.role },
-            process.env.JWT_SECRET,
-            { expiresIn: "1h" }
-        );
-
-        res.json({
-            token,
-            user: {
-                id: user.id,
-                email: user.username,
-                role: user.role,
-                company_name: user.company_name
-            }
-        });
-
-    } catch (err) {
-        console.error("❌ Erreur lors de la connexion :", err);
-        res.status(500).json({ error: err.message });
+    // 🚫 Vérifier si le compte est bloqué
+    if (user.status === "Bloqué") {
+      return res.status(403).json({ error: "Votre compte est bloqué. Veuillez contacter l’administrateur." });
     }
+
+    const validPassword = await bcrypt.compare(password, user.password);
+    if (!validPassword) {
+      return res.status(401).json({ error: "Mot de passe incorrect" });
+    }
+
+    const token = jwt.sign(
+      { id: user.id, username: user.username, role: user.role },
+      process.env.JWT_SECRET,
+      { expiresIn: "1h" }
+    );
+
+    res.json({
+      token,
+      user: {
+        id: user.id,
+        email: user.username,
+        role: user.role,
+        company_name: user.company_name,
+        phone: user.phone
+      }
+    });
+  } catch (err) {
+    console.error("❌ Erreur lors de la connexion :", err);
+    res.status(500).json({ error: err.message });
+  }
 });
-
 
 // ==========================
 //   Middleware Auth
 // ==========================
 function authenticateToken(req, res, next) {
-    const authHeader = req.headers["authorization"];
-    const token = authHeader && authHeader.split(" ")[1];
-    if (!token) return res.sendStatus(401);
+  const authHeader = req.headers["authorization"];
+  const token = authHeader && authHeader.split(" ")[1];
+  if (!token) return res.sendStatus(401);
 
-    jwt.verify(token, process.env.JWT_SECRET, (err, user) => {
-        if (err) return res.sendStatus(403);
-        req.user = user;
-        next();
-    });
+  jwt.verify(token, process.env.JWT_SECRET, (err, user) => {
+    if (err) return res.sendStatus(403);
+    req.user = user;
+    next();
+  });
 }
 
 // ==========================
 //   Middleware Admin
 // ==========================
 function isAdmin(req, res, next) {
-    if (req.user.role !== "admin") {
-        return res.status(403).json({ error: "Accès réservé aux administrateurs" });
-    }
-    next();
+  if (req.user.role !== "admin") {
+    return res.status(403).json({ error: "Accès réservé aux administrateurs" });
+  }
+  next();
 }
 
 // ==========================
@@ -167,6 +168,7 @@ router.get("/users", authenticateToken, async (req, res) => {
         id, 
         username, 
         company_name, 
+        phone, 
         role, 
         status, 
         plan, 
@@ -235,9 +237,7 @@ router.post("/users/:id/reminder", authenticateToken, isAdmin, async (req, res) 
     const user = await pool.query("SELECT username FROM users WHERE id = $1", [req.params.id]);
     if (user.rows.length === 0) return res.status(404).json({ error: "Utilisateur introuvable" });
 
-    // ⚡ Pour l'instant, juste un log. On branchera un vrai email après.
     console.log(`📩 Rappel envoyé à ${user.rows[0].username}`);
-
     res.json({ message: `Rappel envoyé à ${user.rows[0].username}` });
   } catch (err) {
     res.status(500).json({ error: err.message });
@@ -250,7 +250,7 @@ router.post("/users/:id/reminder", authenticateToken, isAdmin, async (req, res) 
 router.get("/me", authenticateToken, async (req, res) => {
   try {
     const result = await pool.query(
-      "SELECT id, username, company_name, role, status, plan, payment_status, payment_method, expiration, amount FROM users WHERE id = $1",
+      "SELECT id, username, company_name, phone, role, status, plan, payment_status, payment_method, expiration, amount FROM users WHERE id = $1",
       [req.user.id]
     );
 
@@ -286,7 +286,7 @@ router.put("/upgrade", authenticateToken, async (req, res) => {
            upgrade_status = $5,
            payment_status = 'À jour'
        WHERE id = $6
-       RETURNING id, username, phone, plan, payment_method, amount, expiration, payment_status, upgrade_status`,
+       RETURNING id, username, company_name, phone, plan, payment_method, amount, expiration, payment_status, upgrade_status`,
       [phone, payment_method, amount, expiration, upgrade_status, req.user.id]
     );
 
@@ -351,8 +351,4 @@ router.put('/upgrade/:userId/reject', authenticateToken, isAdmin, async (req, re
   }
 });
 
-
-
 module.exports = router;
-
-
