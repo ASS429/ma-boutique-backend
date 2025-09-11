@@ -262,38 +262,86 @@ router.get("/me", authenticateToken, async (req, res) => {
 //   Upgrade vers Premium
 // ==========================
 router.put("/upgrade", authenticateToken, async (req, res) => {
-  const { payment_method, amount, expiration } = req.body;
-
+  const { payment_method, amount, expiration, upgrade_status } = req.body;
   if (!payment_method || !amount || !expiration) {
     return res.status(400).json({ error: "Champs manquants" });
   }
 
   try {
     const result = await pool.query(
-      `UPDATE users 
+      `UPDATE users
        SET plan = 'Premium',
            payment_method = $1,
            amount = $2,
            expiration = $3,
+           upgrade_status = $4,
            payment_status = 'À jour'
-       WHERE id = $4
-       RETURNING id, username, plan, payment_method, amount, expiration, payment_status`,
-      [payment_method, amount, expiration, req.user.id]
+       WHERE id = $5
+       RETURNING id, username, plan, payment_method, amount, expiration, payment_status, upgrade_status`,
+      [payment_method, amount, expiration, upgrade_status, req.user.id]
+    );
+
+    if (result.rows.length === 0) return res.status(404).json({ error: "Utilisateur introuvable" });
+
+    res.json({ message: "Demande d’upgrade enregistrée", user: result.rows[0] });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// ==========================
+// Approuver upgrade utilisateur
+// ==========================
+router.put('/upgrade/:userId/approve', authenticateToken, isAdmin, async (req, res) => {
+  const { userId } = req.params;
+
+  try {
+    const result = await pool.query(
+      `UPDATE users
+       SET plan = 'Premium', upgrade_status = 'validé'
+       WHERE id = $1
+       RETURNING id, username, plan, upgrade_status`,
+      [userId]
     );
 
     if (result.rows.length === 0) {
       return res.status(404).json({ error: "Utilisateur introuvable" });
     }
 
-    res.json({
-      message: "Compte mis à jour en Premium avec succès",
-      user: result.rows[0]
-    });
+    res.json({ message: "Upgrade validé avec succès", user: result.rows[0] });
   } catch (err) {
-    console.error("❌ Erreur upgrade Premium:", err);
+    console.error("❌ Erreur approveUpgrade:", err);
     res.status(500).json({ error: err.message });
   }
 });
+
+// ==========================
+// Rejeter upgrade utilisateur
+// ==========================
+router.put('/upgrade/:userId/reject', authenticateToken, isAdmin, async (req, res) => {
+  const { userId } = req.params;
+
+  try {
+    const result = await pool.query(
+      `UPDATE users
+       SET upgrade_status = 'rejeté'
+       WHERE id = $1
+       RETURNING id, username, upgrade_status`,
+      [userId]
+    );
+
+    if (result.rows.length === 0) {
+      return res.status(404).json({ error: "Utilisateur introuvable" });
+    }
+
+    res.json({ message: "Upgrade rejeté avec succès", user: result.rows[0] });
+  } catch (err) {
+    console.error("❌ Erreur rejectUpgrade:", err);
+    res.status(500).json({ error: err.message });
+  }
+});
+
 
 
 module.exports = router;
