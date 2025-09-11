@@ -22,6 +22,29 @@ router.get('/', verifyToken, async (req, res) => {
   }
 });
 
+// ✅ GET /products/:id : Récupère un produit spécifique (sécurisé par user_id)
+router.get('/:id', verifyToken, async (req, res) => {
+  try {
+    const userId = req.user.id;
+    const productId = req.params.id;
+
+    const result = await db.query(
+      'SELECT * FROM products WHERE id = $1 AND user_id = $2',
+      [productId, userId]
+    );
+
+    if (result.rows.length === 0) {
+      return res.status(404).json({ error: 'Produit introuvable ou non autorisé.' });
+    }
+
+    res.json(result.rows[0]);
+  } catch (err) {
+    console.error('Erreur GET /products/:id:', err);
+    res.status(500).json({ error: 'Erreur serveur' });
+  }
+});
+
+
 // POST /products : Ajoute un produit lié à l'utilisateur connecté
 router.post('/', verifyToken, async (req, res) => {
   try {
