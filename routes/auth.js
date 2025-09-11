@@ -89,7 +89,7 @@ router.post("/login", async (req, res) => {
 
     try {
         const result = await pool.query(
-            "SELECT id, username, password, role, company_name FROM users WHERE username = $1",
+            "SELECT id, username, password, role, company_name, status FROM users WHERE username = $1",
             [username]
         );
 
@@ -98,6 +98,12 @@ router.post("/login", async (req, res) => {
         }
 
         const user = result.rows[0];
+
+        // 🚫 Vérifier si le compte est bloqué
+        if (user.status === "Bloqué") {
+            return res.status(403).json({ error: "Votre compte est bloqué. Veuillez contacter l’administrateur." });
+        }
+
         const validPassword = await bcrypt.compare(password, user.password);
         if (!validPassword) {
             return res.status(401).json({ error: "Mot de passe incorrect" });
@@ -124,6 +130,7 @@ router.post("/login", async (req, res) => {
         res.status(500).json({ error: err.message });
     }
 });
+
 
 // ==========================
 //   Middleware Auth
