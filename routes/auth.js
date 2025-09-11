@@ -265,11 +265,9 @@ router.get("/me", authenticateToken, async (req, res) => {
   }
 });
 
-// ==========================
-//   Upgrade vers Premium
-// ==========================
+// Upgrade vers Premium
 router.put("/upgrade", authenticateToken, async (req, res) => {
-  const { phone, payment_method, amount, expiration, upgrade_status } = req.body;
+  const { phone, payment_method, amount, expiration } = req.body;
 
   if (!phone || !payment_method || !amount || !expiration) {
     return res.status(400).json({ error: "Champs manquants" });
@@ -283,11 +281,11 @@ router.put("/upgrade", authenticateToken, async (req, res) => {
            payment_method = $2,
            amount = $3,
            expiration = $4,
-           upgrade_status = $5,
+           upgrade_status = 'en attente', -- ✅ Par défaut en attente
            payment_status = 'À jour'
-       WHERE id = $6
+       WHERE id = $5
        RETURNING id, username, company_name, phone, plan, payment_method, amount, expiration, payment_status, upgrade_status`,
-      [phone, payment_method, amount, expiration, upgrade_status, req.user.id]
+      [phone, payment_method, amount, expiration, req.user.id]
     );
 
     if (result.rows.length === 0) return res.status(404).json({ error: "Utilisateur introuvable" });
@@ -298,6 +296,7 @@ router.put("/upgrade", authenticateToken, async (req, res) => {
     res.status(500).json({ error: err.message });
   }
 });
+
 
 // ==========================
 // Approuver upgrade utilisateur
