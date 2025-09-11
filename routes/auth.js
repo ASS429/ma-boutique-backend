@@ -258,6 +258,43 @@ router.get("/me", authenticateToken, async (req, res) => {
   }
 });
 
+// ==========================
+//   Upgrade vers Premium
+// ==========================
+router.put("/upgrade", authenticateToken, async (req, res) => {
+  const { payment_method, amount, expiration } = req.body;
+
+  if (!payment_method || !amount || !expiration) {
+    return res.status(400).json({ error: "Champs manquants" });
+  }
+
+  try {
+    const result = await pool.query(
+      `UPDATE users 
+       SET plan = 'Premium',
+           payment_method = $1,
+           amount = $2,
+           expiration = $3,
+           payment_status = 'À jour'
+       WHERE id = $4
+       RETURNING id, username, plan, payment_method, amount, expiration, payment_status`,
+      [payment_method, amount, expiration, req.user.id]
+    );
+
+    if (result.rows.length === 0) {
+      return res.status(404).json({ error: "Utilisateur introuvable" });
+    }
+
+    res.json({
+      message: "Compte mis à jour en Premium avec succès",
+      user: result.rows[0]
+    });
+  } catch (err) {
+    console.error("❌ Erreur upgrade Premium:", err);
+    res.status(500).json({ error: err.message });
+  }
+});
+
 
 module.exports = router;
 
