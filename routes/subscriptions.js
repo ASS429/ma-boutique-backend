@@ -1,9 +1,12 @@
 const express = require("express");
 const router = express.Router();
 const pool = require("../db");
-const { authenticateToken, isAdmin } = require("./auth"); // réutilise middlewares
 
-// 📌 Récupérer tous les abonnements Premium
+// ⚡️ Importer les middlewares depuis le bon fichier
+// Vérifie bien le chemin : souvent ils sont dans un dossier `middleware/`
+const { authenticateToken, isAdmin } = require("../middleware/auth"); 
+
+// 📌 Récupérer tous les abonnements Premium (admin uniquement)
 router.get("/", authenticateToken, isAdmin, async (req, res) => {
   try {
     const result = await pool.query(`
@@ -23,7 +26,7 @@ router.get("/", authenticateToken, isAdmin, async (req, res) => {
 // 📌 Enregistrer un nouveau paiement Premium
 router.post("/", authenticateToken, async (req, res) => {
   const { payment_method, amount, expiration } = req.body;
-  const userId = req.user.id;
+  const userId = req.user?.id;
 
   if (!payment_method || !amount || !expiration) {
     return res.status(400).json({ error: "Champs manquants" });
@@ -39,7 +42,7 @@ router.post("/", authenticateToken, async (req, res) => {
 
     res.status(201).json({
       message: "Paiement Premium enregistré",
-      subscription: result.rows[0]
+      subscription: result.rows[0],
     });
   } catch (err) {
     console.error("❌ Erreur POST /subscriptions :", err);
