@@ -19,7 +19,8 @@ router.post("/register", async (req, res) => {
     payment_status = "À jour",
     payment_method,
     expiration,
-    amount = 0.0
+    amount = 0.0,
+    upgrade_status = "validé" // ✅ par défaut validé (Free = pas besoin de validation)
   } = req.body;
 
   if (!username || !password) {
@@ -48,9 +49,9 @@ router.post("/register", async (req, res) => {
     // Insertion avec TOUS les champs
     const result = await pool.query(
       `INSERT INTO users 
-        (username, password, company_name, phone, role, status, plan, payment_status, payment_method, expiration, amount) 
-       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11) 
-       RETURNING id, username, company_name, phone, role, status, plan, payment_status, payment_method, expiration, amount`,
+        (username, password, company_name, phone, role, status, plan, payment_status, payment_method, expiration, amount, upgrade_status) 
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12) 
+       RETURNING id, username, company_name, phone, role, status, plan, payment_status, payment_method, expiration, amount, upgrade_status`,
       [
         username,
         hashedPassword,
@@ -62,7 +63,8 @@ router.post("/register", async (req, res) => {
         payment_status,
         payment_method || null,
         expiration || null,
-        amount
+        amount,
+        upgrade_status
       ]
     );
 
@@ -91,7 +93,7 @@ router.post("/login", async (req, res) => {
 
   try {
     const result = await pool.query(
-      "SELECT id, username, password, role, company_name, phone, status FROM users WHERE username = $1",
+      "SELECT id, username, password, role, company_name, phone, status, plan, upgrade_status FROM users WHERE username = $1",
       [username]
     );
 
@@ -124,7 +126,9 @@ router.post("/login", async (req, res) => {
         email: user.username,
         role: user.role,
         company_name: user.company_name,
-        phone: user.phone
+        phone: user.phone,
+        plan: user.plan,
+        upgrade_status: user.upgrade_status
       }
     });
   } catch (err) {
@@ -175,7 +179,8 @@ router.get("/users", authenticateToken, async (req, res) => {
         payment_status, 
         payment_method, 
         expiration, 
-        amount
+        amount,
+        upgrade_status
       FROM users
     `);
     res.json(result.rows);
@@ -231,7 +236,7 @@ router.delete("/users/:id", authenticateToken, isAdmin, async (req, res) => {
   }
 });
 
-// Envoyer un rappel (simple log pour l’instant)
+// Envoyer un rappel
 router.post("/users/:id/reminder", authenticateToken, isAdmin, async (req, res) => {
   try {
     const user = await pool.query("SELECT username FROM users WHERE id = $1", [req.params.id]);
@@ -250,7 +255,9 @@ router.post("/users/:id/reminder", authenticateToken, isAdmin, async (req, res) 
 router.get("/me", authenticateToken, async (req, res) => {
   try {
     const result = await pool.query(
-      "SELECT id, username, company_name, phone, role, status, plan, payment_status, payment_method, expiration, amount FROM users WHERE id = $1",
+      `SELECT id, username, company_name, phone, role, status, plan, 
+              payment_status, payment_method, expiration, amount, upgrade_status 
+       FROM users WHERE id = $1`,
       [req.user.id]
     );
 
@@ -265,7 +272,9 @@ router.get("/me", authenticateToken, async (req, res) => {
   }
 });
 
-// Upgrade vers Premium
+// ==========================
+//   Upgrade vers Premium
+// ==========================
 router.put("/upgrade", authenticateToken, async (req, res) => {
   const { phone, payment_method, amount, expiration } = req.body;
 
@@ -281,7 +290,7 @@ router.put("/upgrade", authenticateToken, async (req, res) => {
            payment_method = $2,
            amount = $3,
            expiration = $4,
-           upgrade_status = 'en attente', -- ✅ Par défaut en attente
+           upgrade_status = 'en attente',
            payment_status = 'À jour'
        WHERE id = $5
        RETURNING id, username, company_name, phone, plan, payment_method, amount, expiration, payment_status, upgrade_status`,
@@ -296,7 +305,6 @@ router.put("/upgrade", authenticateToken, async (req, res) => {
     res.status(500).json({ error: err.message });
   }
 });
-
 
 // ==========================
 // Approuver upgrade utilisateur
@@ -333,9 +341,9 @@ router.put('/upgrade/:userId/reject', authenticateToken, isAdmin, async (req, re
   try {
     const result = await pool.query(
       `UPDATE users
-       SET upgrade_status = 'rejeté'
+       SET upgrade_status = 'rejeté', plan = 'Free'
        WHERE id = $1
-       RETURNING id, username, upgrade_status`,
+       RETURNING id, username, plan, upgrade_status`,
       [userId]
     );
 
