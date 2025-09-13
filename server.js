@@ -43,6 +43,8 @@ app.use('/categories', require('./routes/categories'));
 app.use('/sales', require('./routes/sales'));
 app.use('/tontines', require('./routes/tontines'));
 app.use('/stats', require('./routes/stats'));
+app.use("/admin-stats", require('./routes/adminStats'));
+
 
 
 // Test route
