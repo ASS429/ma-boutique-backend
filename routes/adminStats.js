@@ -62,4 +62,29 @@ router.get("/revenus", verifyToken, isAdmin, async (req, res) => {
   }
 });
 
+/**
+ * GET /admin-stats/transactions?limit=10
+ * Retourne la liste des abonnements validés ou en attente (classés par date desc)
+ */
+router.get("/transactions", verifyToken, isAdmin, async (req, res) => {
+  try {
+    const limit = parseInt(req.query.limit) || 10;
+
+    const q = await db.query(
+      `SELECT id, username, plan, amount, payment_method, upgrade_status, expiration
+       FROM users
+       WHERE plan = 'Premium'
+       ORDER BY expiration DESC NULLS LAST
+       LIMIT $1`,
+      [limit]
+    );
+
+    res.json(q.rows);
+  } catch (err) {
+    console.error("❌ Erreur /admin-stats/transactions:", err);
+    res.status(500).json({ error: "Erreur serveur" });
+  }
+});
+
+
 module.exports = router;
