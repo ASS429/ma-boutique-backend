@@ -5,6 +5,9 @@ require('dotenv').config();
 const app = express();
 const port = process.env.PORT || 4000;
 
+const adminWithdrawalsRoutes = require("./routes/adminWithdrawals");
+
+
 // Middleware
 const allowedOrigins = [
   'https://ma-boutique-frontend1.onrender.com', // frontend Render
@@ -44,6 +47,7 @@ app.use('/sales', require('./routes/sales'));
 app.use('/tontines', require('./routes/tontines'));
 app.use('/stats', require('./routes/stats'));
 app.use("/admin-stats", require('./routes/adminStats'));
+app.use("/admin-withdrawals", adminWithdrawalsRoutes);
 
 
 
