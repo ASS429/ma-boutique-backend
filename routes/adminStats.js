@@ -14,48 +14,48 @@ function isAdmin(req, res, next) {
 
 /**
  * GET /admin-stats/revenus?period=all|daily|weekly|monthly
- * Retourne : balance (somme validée tous temps), periodTotal (somme validée pour période), pending (somme en attente)
  */
 router.get("/revenus", verifyToken, isAdmin, async (req, res) => {
   try {
     const period = (req.query.period || "monthly").toLowerCase();
 
-    // Construire filtre période sur la colonne expiration (utilisée pour les abonnements)
     let periodFilter = "";
     if (period === "daily") {
       periodFilter = "AND DATE(expiration) = CURRENT_DATE";
     } else if (period === "weekly") {
-      periodFilter = "AND DATE_TRUNC('week', expiration) = DATE_TRUNC('week', CURRENT_DATE)";
+      periodFilter =
+        "AND DATE_TRUNC('week', expiration) = DATE_TRUNC('week', CURRENT_DATE)";
     } else if (period === "monthly") {
-      periodFilter = "AND DATE_TRUNC('month', expiration) = DATE_TRUNC('month', CURRENT_DATE)";
-    } // 'all' => pas de filtre
+      periodFilter =
+        "AND DATE_TRUNC('month', expiration) = DATE_TRUNC('month', CURRENT_DATE)";
+    }
 
-    // Balance totale validée (tous temps)
     const balQ = await db.query(
       `SELECT COALESCE(SUM(amount),0) AS balance
        FROM users
        WHERE plan = 'Premium' AND upgrade_status = 'validé'`
     );
 
-    // Montant validé pour la période sélectionnée
     const periodQ = await db.query(
       `SELECT COALESCE(SUM(amount),0) AS period_total
        FROM users
-       WHERE plan = 'Premium' AND upgrade_status = 'validé' ${period === 'all' ? '' : periodFilter}`
+       WHERE plan = 'Premium' AND upgrade_status = 'validé' ${
+         period === "all" ? "" : periodFilter
+       }`
     );
 
-    // Montant en attente (demandes en attente)
     const pendingQ = await db.query(
       `SELECT COALESCE(SUM(amount),0) AS pending
        FROM users
        WHERE plan = 'Premium' AND upgrade_status = 'en attente'`
     );
 
-    const balance = Number(balQ.rows[0].balance || 0);
-    const periodTotal = Number(periodQ.rows[0].period_total || 0);
-    const pending = Number(pendingQ.rows[0].pending || 0);
-
-    res.json({ balance, periodTotal, pending, period });
+    res.json({
+      balance: Number(balQ.rows[0].balance || 0),
+      periodTotal: Number(periodQ.rows[0].period_total || 0),
+      pending: Number(pendingQ.rows[0].pending || 0),
+      period,
+    });
   } catch (err) {
     console.error("❌ Erreur /admin-stats/revenus:", err);
     res.status(500).json({ error: "Erreur serveur" });
@@ -64,7 +64,6 @@ router.get("/revenus", verifyToken, isAdmin, async (req, res) => {
 
 /**
  * GET /admin-stats/transactions?limit=10
- * Retourne la liste des abonnements validés ou en attente (classés par date desc)
  */
 router.get("/transactions", verifyToken, isAdmin, async (req, res) => {
   try {
@@ -86,84 +85,25 @@ router.get("/transactions", verifyToken, isAdmin, async (req, res) => {
   }
 });
 
-// 🔹 Comptes Admin
-router.get("/accounts", verifyToken, isAdmin, async (req, res) => {
-  try {
-    // Soldes par méthode de paiement (Wave, Orange, Cash)
-    const accountsQ = await db.query(
-      `SELECT payment_method, COALESCE(SUM(amount),0) AS total
-       FROM users
-       WHERE plan = 'Premium' AND upgrade_status = 'validé'
-       GROUP BY payment_method`
-    );
-
-    // Total disponible
-    const totalQ = await db.query(
-      `SELECT COALESCE(SUM(amount),0) AS total
-       FROM users
-       WHERE plan = 'Premium' AND upgrade_status = 'validé'`
-    );
-
-    // Entrées aujourd’hui
-    const entriesQ = await db.query(
-      `SELECT COALESCE(SUM(amount),0) AS total
-       FROM users
-       WHERE plan = 'Premium' 
-       AND upgrade_status = 'validé'
-       AND DATE(expiration) = CURRENT_DATE`
-    );
-
-    // Sorties aujourd’hui (retraits validés)
-    const withdrawalsQ = await db.query(
-      `SELECT COALESCE(SUM(amount),0) AS total
-       FROM withdrawals
-       WHERE status = 'validé'
-       AND DATE(created_at) = CURRENT_DATE`
-    );
-
-    const accounts = accountsQ.rows.reduce((acc, row) => {
-      acc[row.payment_method] = Number(row.total);
-      return acc;
-    }, {});
-
-    const total = Number(totalQ.rows[0].total);
-    const entries = Number(entriesQ.rows[0].total);
-    const withdrawals = Number(withdrawalsQ.rows[0].total);
-    const net = entries - withdrawals;
-
-    res.json({
-      accounts, // { wave: 32000, orange: 45000, cash: 15000 }
-      total,
-      entries,
-      withdrawals,
-      net
-    });
-  } catch (err) {
-    console.error("❌ Erreur /admin-stats/accounts:", err);
-    res.status(500).json({ error: "Erreur serveur" });
-  }
-});
-
 /**
  * GET /admin-stats/accounts
- * Retourne les soldes par compte (Orange, Wave, Cash) + résumé
+ * Retourne les soldes par compte + résumé global
  */
 router.get("/accounts", verifyToken, isAdmin, async (req, res) => {
   try {
-    // ✅ 1. Récupérer tous les paiements validés des utilisateurs Premium
+    // 1. Abonnements Premium validés
     const payQ = await db.query(
       `SELECT payment_method, COALESCE(SUM(amount),0) AS total
        FROM users
        WHERE plan = 'Premium' AND upgrade_status = 'validé'
        GROUP BY payment_method`
     );
-
     const accounts = { orange: 0, wave: 0, cash: 0 };
     payQ.rows.forEach(r => {
       if (r.payment_method) accounts[r.payment_method] = Number(r.total);
     });
 
-    // ✅ 2. Soustraire les retraits validés
+    // 2. Retraits validés
     const wQ = await db.query(
       `SELECT method, COALESCE(SUM(amount),0) AS total
        FROM withdrawals
@@ -175,7 +115,7 @@ router.get("/accounts", verifyToken, isAdmin, async (req, res) => {
       if (r.method) accounts[r.method] -= Number(r.total);
     });
 
-    // ✅ 3. Appliquer les transferts internes
+    // 3. Transferts internes
     const tQ = await db.query(
       `SELECT from_account, to_account, amount
        FROM admin_transfers
@@ -187,10 +127,9 @@ router.get("/accounts", verifyToken, isAdmin, async (req, res) => {
       accounts[r.to_account] += Number(r.amount);
     });
 
-    // ✅ 4. Calculer le résumé global
+    // 4. Résumé global
     const total = accounts.orange + accounts.wave + accounts.cash;
 
-    // Entrées aujourd'hui (paiements validés aujourd’hui)
     const entriesQ = await db.query(
       `SELECT COALESCE(SUM(amount),0) AS total
        FROM users
@@ -200,7 +139,6 @@ router.get("/accounts", verifyToken, isAdmin, async (req, res) => {
     );
     const entries = Number(entriesQ.rows[0].total);
 
-    // Sorties aujourd'hui (retraits validés aujourd’hui)
     const withdrawalsQ = await db.query(
       `SELECT COALESCE(SUM(amount),0) AS total
        FROM withdrawals
@@ -211,7 +149,6 @@ router.get("/accounts", verifyToken, isAdmin, async (req, res) => {
     );
     const withdrawals = Number(withdrawalsQ.rows[0].total);
 
-    // Bénéfice net (entrées - sorties)
     const net = entries - withdrawals;
 
     res.json({
@@ -219,7 +156,7 @@ router.get("/accounts", verifyToken, isAdmin, async (req, res) => {
       total,
       entries,
       withdrawals,
-      net
+      net,
     });
   } catch (err) {
     console.error("❌ Erreur /admin-stats/accounts:", err);
@@ -227,7 +164,53 @@ router.get("/accounts", verifyToken, isAdmin, async (req, res) => {
   }
 });
 
+/**
+ * GET /admin-stats/accounts/:method
+ * Détails des transactions d’un compte spécifique
+ */
+router.get("/accounts/:method", verifyToken, isAdmin, async (req, res) => {
+  try {
+    const { method } = req.params;
 
+    // Récupérer transactions (Premium validés avec ce payment_method)
+    const subs = await db.query(
+      `SELECT username, amount, payment_method, expiration
+       FROM users
+       WHERE plan = 'Premium' AND upgrade_status = 'validé' AND payment_method = $1
+       ORDER BY expiration DESC NULLS LAST
+       LIMIT 50`,
+      [method]
+    );
 
+    // Récupérer retraits validés sur ce compte
+    const outs = await db.query(
+      `SELECT amount, status, created_at
+       FROM withdrawals
+       WHERE admin_id = $1 AND status = 'validé' AND method = $2
+       ORDER BY created_at DESC
+       LIMIT 50`,
+      [req.user.id, method]
+    );
+
+    // Récupérer transferts impliquant ce compte
+    const transfers = await db.query(
+      `SELECT from_account, to_account, amount, created_at
+       FROM admin_transfers
+       WHERE admin_id = $1 AND (from_account = $2 OR to_account = $2)
+       ORDER BY created_at DESC
+       LIMIT 50`,
+      [req.user.id, method]
+    );
+
+    res.json({
+      subscriptions: subs.rows,
+      withdrawals: outs.rows,
+      transfers: transfers.rows,
+    });
+  } catch (err) {
+    console.error("❌ Erreur /admin-stats/accounts/:method:", err);
+    res.status(500).json({ error: "Erreur serveur" });
+  }
+});
 
 module.exports = router;
