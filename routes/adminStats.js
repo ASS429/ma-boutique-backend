@@ -144,6 +144,90 @@ router.get("/accounts", verifyToken, isAdmin, async (req, res) => {
   }
 });
 
+/**
+ * GET /admin-stats/accounts
+ * Retourne les soldes par compte (Orange, Wave, Cash) + résumé
+ */
+router.get("/accounts", verifyToken, isAdmin, async (req, res) => {
+  try {
+    // ✅ 1. Récupérer tous les paiements validés des utilisateurs Premium
+    const payQ = await db.query(
+      `SELECT payment_method, COALESCE(SUM(amount),0) AS total
+       FROM users
+       WHERE plan = 'Premium' AND upgrade_status = 'validé'
+       GROUP BY payment_method`
+    );
+
+    const accounts = { orange: 0, wave: 0, cash: 0 };
+    payQ.rows.forEach(r => {
+      if (r.payment_method) accounts[r.payment_method] = Number(r.total);
+    });
+
+    // ✅ 2. Soustraire les retraits validés
+    const wQ = await db.query(
+      `SELECT method, COALESCE(SUM(amount),0) AS total
+       FROM withdrawals
+       WHERE admin_id = $1 AND status = 'validé'
+       GROUP BY method`,
+      [req.user.id]
+    );
+    wQ.rows.forEach(r => {
+      if (r.method) accounts[r.method] -= Number(r.total);
+    });
+
+    // ✅ 3. Appliquer les transferts internes
+    const tQ = await db.query(
+      `SELECT from_account, to_account, amount
+       FROM admin_transfers
+       WHERE admin_id = $1`,
+      [req.user.id]
+    );
+    tQ.rows.forEach(r => {
+      accounts[r.from_account] -= Number(r.amount);
+      accounts[r.to_account] += Number(r.amount);
+    });
+
+    // ✅ 4. Calculer le résumé global
+    const total = accounts.orange + accounts.wave + accounts.cash;
+
+    // Entrées aujourd'hui (paiements validés aujourd’hui)
+    const entriesQ = await db.query(
+      `SELECT COALESCE(SUM(amount),0) AS total
+       FROM users
+       WHERE plan = 'Premium' 
+         AND upgrade_status = 'validé'
+         AND DATE(expiration) = CURRENT_DATE`
+    );
+    const entries = Number(entriesQ.rows[0].total);
+
+    // Sorties aujourd'hui (retraits validés aujourd’hui)
+    const withdrawalsQ = await db.query(
+      `SELECT COALESCE(SUM(amount),0) AS total
+       FROM withdrawals
+       WHERE admin_id = $1
+         AND status = 'validé'
+         AND DATE(created_at) = CURRENT_DATE`,
+      [req.user.id]
+    );
+    const withdrawals = Number(withdrawalsQ.rows[0].total);
+
+    // Bénéfice net (entrées - sorties)
+    const net = entries - withdrawals;
+
+    res.json({
+      accounts,
+      total,
+      entries,
+      withdrawals,
+      net
+    });
+  } catch (err) {
+    console.error("❌ Erreur /admin-stats/accounts:", err);
+    res.status(500).json({ error: "Erreur serveur" });
+  }
+});
+
+
 
 
 module.exports = router;
