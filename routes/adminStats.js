@@ -70,7 +70,7 @@ router.get("/transactions", verifyToken, isAdmin, async (req, res) => {
     const limit = parseInt(req.query.limit) || 10;
 
     const q = await db.query(
-      `SELECT id, username, plan, amount, payment_method, upgrade_status, expiration
+      `SELECT id, username, plan, amount, payment_method, upgrade_status, expiration, created_at
        FROM users
        WHERE plan = 'Premium'
        ORDER BY expiration DESC NULLS LAST
@@ -130,6 +130,7 @@ router.get("/accounts", verifyToken, isAdmin, async (req, res) => {
     // 4. Résumé global
     const total = accounts.orange + accounts.wave + accounts.cash;
 
+    // ✅ Entrées aujourd'hui (abonnements créés aujourd’hui)
     const entriesQ = await db.query(
       `SELECT COALESCE(SUM(amount),0) AS total
        FROM users
@@ -139,6 +140,7 @@ router.get("/accounts", verifyToken, isAdmin, async (req, res) => {
     );
     const entries = Number(entriesQ.rows[0].total);
 
+    // ✅ Sorties aujourd'hui (retraits validés aujourd’hui)
     const withdrawalsQ = await db.query(
       `SELECT COALESCE(SUM(amount),0) AS total
        FROM withdrawals
@@ -149,6 +151,7 @@ router.get("/accounts", verifyToken, isAdmin, async (req, res) => {
     );
     const withdrawals = Number(withdrawalsQ.rows[0].total);
 
+    // ✅ Bénéfice net
     const net = entries - withdrawals;
 
     res.json({
@@ -172,9 +175,8 @@ router.get("/accounts/:method", verifyToken, isAdmin, async (req, res) => {
   try {
     const { method } = req.params;
 
-    // Récupérer transactions (Premium validés avec ce payment_method)
     const subs = await db.query(
-      `SELECT username, amount, payment_method, expiration
+      `SELECT username, amount, payment_method, expiration, created_at
        FROM users
        WHERE plan = 'Premium' AND upgrade_status = 'validé' AND payment_method = $1
        ORDER BY expiration DESC NULLS LAST
@@ -182,7 +184,6 @@ router.get("/accounts/:method", verifyToken, isAdmin, async (req, res) => {
       [method]
     );
 
-    // Récupérer retraits validés sur ce compte
     const outs = await db.query(
       `SELECT amount, status, created_at
        FROM withdrawals
@@ -192,7 +193,6 @@ router.get("/accounts/:method", verifyToken, isAdmin, async (req, res) => {
       [req.user.id, method]
     );
 
-    // Récupérer transferts impliquant ce compte
     const transfers = await db.query(
       `SELECT from_account, to_account, amount, created_at
        FROM admin_transfers
