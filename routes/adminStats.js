@@ -86,5 +86,64 @@ router.get("/transactions", verifyToken, isAdmin, async (req, res) => {
   }
 });
 
+// 🔹 Comptes Admin
+router.get("/accounts", verifyToken, isAdmin, async (req, res) => {
+  try {
+    // Soldes par méthode de paiement (Wave, Orange, Cash)
+    const accountsQ = await db.query(
+      `SELECT payment_method, COALESCE(SUM(amount),0) AS total
+       FROM users
+       WHERE plan = 'Premium' AND upgrade_status = 'validé'
+       GROUP BY payment_method`
+    );
+
+    // Total disponible
+    const totalQ = await db.query(
+      `SELECT COALESCE(SUM(amount),0) AS total
+       FROM users
+       WHERE plan = 'Premium' AND upgrade_status = 'validé'`
+    );
+
+    // Entrées aujourd’hui
+    const entriesQ = await db.query(
+      `SELECT COALESCE(SUM(amount),0) AS total
+       FROM users
+       WHERE plan = 'Premium' 
+       AND upgrade_status = 'validé'
+       AND DATE(expiration) = CURRENT_DATE`
+    );
+
+    // Sorties aujourd’hui (retraits validés)
+    const withdrawalsQ = await db.query(
+      `SELECT COALESCE(SUM(amount),0) AS total
+       FROM withdrawals
+       WHERE status = 'validé'
+       AND DATE(created_at) = CURRENT_DATE`
+    );
+
+    const accounts = accountsQ.rows.reduce((acc, row) => {
+      acc[row.payment_method] = Number(row.total);
+      return acc;
+    }, {});
+
+    const total = Number(totalQ.rows[0].total);
+    const entries = Number(entriesQ.rows[0].total);
+    const withdrawals = Number(withdrawalsQ.rows[0].total);
+    const net = entries - withdrawals;
+
+    res.json({
+      accounts, // { wave: 32000, orange: 45000, cash: 15000 }
+      total,
+      entries,
+      withdrawals,
+      net
+    });
+  } catch (err) {
+    console.error("❌ Erreur /admin-stats/accounts:", err);
+    res.status(500).json({ error: "Erreur serveur" });
+  }
+});
+
+
 
 module.exports = router;
