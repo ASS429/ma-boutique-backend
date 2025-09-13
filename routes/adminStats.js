@@ -135,7 +135,7 @@ router.get("/accounts", verifyToken, isAdmin, async (req, res) => {
        FROM users
        WHERE plan = 'Premium' 
          AND upgrade_status = 'validé'
-         AND DATE(expiration) = CURRENT_DATE`
+         AND DATE(created_at) = CURRENT_DATE`
     );
     const entries = Number(entriesQ.rows[0].total);
 
