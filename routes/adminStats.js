@@ -246,60 +246,60 @@ router.get("/revenus/evolution", verifyToken, isAdmin, async (req, res) => {
 router.get("/overview", verifyToken, isAdmin, async (req, res) => {
   try {
     // Total utilisateurs (tous)
-const totalUsersQ = await db.query(`SELECT COUNT(*) AS total FROM users`);
+    const totalUsersQ = await db.query(`SELECT COUNT(*) AS total FROM users`);
 
-// Abonnés Premium actifs actuels
-const activePremiumQ = await db.query(
-  `SELECT COUNT(*) AS total 
-   FROM users
-   WHERE plan = 'Premium'
-     AND upgrade_status = 'validé'
-     AND (expiration IS NULL OR expiration >= CURRENT_DATE)`
-);
+    // Abonnés Premium actifs actuels
+    const activePremiumQ = await db.query(
+      `SELECT COUNT(*) AS total 
+       FROM users
+       WHERE plan = 'Premium'
+         AND upgrade_status = 'validé'
+         AND (expiration IS NULL OR expiration >= CURRENT_DATE)`
+    );
 
-// Revenus validés (total)
-const revenuesQ = await db.query(
-  `SELECT COALESCE(SUM(amount),0) AS total
-   FROM users
-   WHERE plan = 'Premium' AND upgrade_status = 'validé'`
-);
+    // Revenus validés (total)
+    const revenuesQ = await db.query(
+      `SELECT COALESCE(SUM(amount),0) AS total
+       FROM users
+       WHERE plan = 'Premium' AND upgrade_status = 'validé'`
+    );
 
-// Abonnements en attente
-const pendingQ = await db.query(
-  `SELECT COUNT(*) AS total
-   FROM users
-   WHERE plan = 'Premium' AND upgrade_status = 'en attente'`
-);
+    // Abonnements en attente
+    const pendingQ = await db.query(
+      `SELECT COUNT(*) AS total
+       FROM users
+       WHERE plan = 'Premium' AND upgrade_status = 'en attente'`
+    );
 
-// ✅ Snapshot mois courant (fin de ce mois)
-const currentQ = await db.query(`
-  SELECT 
-    (SELECT COUNT(*) FROM users) AS total_users,
-    (SELECT COUNT(*) 
-     FROM users
-     WHERE plan = 'Premium'
-       AND upgrade_status = 'validé'
-       AND (expiration IS NULL OR expiration >= CURRENT_DATE)) AS active_premium,
-    (SELECT COALESCE(SUM(amount),0) 
-     FROM users
-     WHERE plan = 'Premium' AND upgrade_status = 'validé') AS revenues
-`);
+    // ✅ Snapshot mois courant (aujourd’hui)
+    const currentQ = await db.query(`
+      SELECT 
+        (SELECT COUNT(*) FROM users) AS total_users,
+        (SELECT COUNT(*) 
+         FROM users
+         WHERE plan = 'Premium'
+           AND upgrade_status = 'validé'
+           AND (expiration IS NULL OR expiration >= CURRENT_DATE)) AS active_premium,
+        (SELECT COALESCE(SUM(amount),0) 
+         FROM users
+         WHERE plan = 'Premium' AND upgrade_status = 'validé') AS revenues
+    `);
 
-// ✅ Snapshot mois précédent (fin du mois précédent)
-const prevQ = await db.query(`
-  SELECT 
-    (SELECT COUNT(*) FROM users
-     WHERE created_at < DATE_TRUNC('month', CURRENT_DATE)) AS total_users,
-    (SELECT COUNT(*) 
-     FROM users
-     WHERE plan = 'Premium'
-       AND upgrade_status = 'validé'
-       AND (expiration IS NULL OR expiration >= DATE_TRUNC('month', CURRENT_DATE))) AS active_premium,
-    (SELECT COALESCE(SUM(amount),0) 
-     FROM users
-     WHERE plan = 'Premium' AND upgrade_status = 'validé'
-       AND created_at < DATE_TRUNC('month', CURRENT_DATE)) AS revenues
-`);
+    // ✅ Snapshot mois précédent (dernier jour du mois précédent)
+    const prevQ = await db.query(`
+      SELECT 
+        (SELECT COUNT(*) FROM users
+         WHERE created_at < DATE_TRUNC('month', CURRENT_DATE)) AS total_users,
+        (SELECT COUNT(*) 
+         FROM users
+         WHERE plan = 'Premium'
+           AND upgrade_status = 'validé'
+           AND (expiration IS NULL OR expiration >= DATE_TRUNC('month', CURRENT_DATE) - INTERVAL '1 day')) AS active_premium,
+        (SELECT COALESCE(SUM(amount),0) 
+         FROM users
+         WHERE plan = 'Premium' AND upgrade_status = 'validé'
+           AND created_at < DATE_TRUNC('month', CURRENT_DATE)) AS revenues
+    `);
 
     res.json({
       totalUsers: Number(totalUsersQ.rows[0].total),
