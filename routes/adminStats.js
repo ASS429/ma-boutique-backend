@@ -257,11 +257,12 @@ router.get("/overview", verifyToken, isAdmin, async (req, res) => {
          AND (expiration IS NULL OR expiration >= CURRENT_DATE)`
     );
 
-    // Revenus validés (total)
+    // Revenus validés (total jusqu’à aujourd’hui)
     const revenuesQ = await db.query(
       `SELECT COALESCE(SUM(amount),0) AS total
        FROM users
-       WHERE plan = 'Premium' AND upgrade_status = 'validé'`
+       WHERE plan = 'Premium' AND upgrade_status = 'validé'
+         AND created_at <= CURRENT_DATE`
     );
 
     // Abonnements en attente
@@ -282,7 +283,8 @@ router.get("/overview", verifyToken, isAdmin, async (req, res) => {
            AND (expiration IS NULL OR expiration >= CURRENT_DATE)) AS active_premium,
         (SELECT COALESCE(SUM(amount),0) 
          FROM users
-         WHERE plan = 'Premium' AND upgrade_status = 'validé') AS revenues
+         WHERE plan = 'Premium' AND upgrade_status = 'validé'
+           AND created_at <= CURRENT_DATE) AS revenues
     `);
 
     // ✅ Snapshot mois précédent (dernier jour du mois précédent)
