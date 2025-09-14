@@ -3,6 +3,7 @@ const router = express.Router();
 const bcrypt = require("bcryptjs");
 const jwt = require("jsonwebtoken");
 const pool = require("../db");
+const sendEmail = require("../utils/mailer");
 
 // ==========================
 //   Inscription (Admin ou public)
@@ -134,8 +135,11 @@ router.post("/login", async (req, res) => {
         [user.id, code, expires]
       );
 
-      // TODO: envoi email → ici simplifié en console.log
-      console.log(`📧 Code 2FA pour ${user.username} : ${code}`);
+      await sendEmail(
+  user.username, // email de l’utilisateur
+  "Votre code de connexion (2FA) - Ma Boutique",
+  `Bonjour,\n\nVoici votre code de connexion : ${code}\n\nIl est valable 5 minutes.\n\nÀ bientôt !`
+);
 
       return res.json({
         twofa_required: true,
