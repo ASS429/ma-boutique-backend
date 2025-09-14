@@ -88,4 +88,23 @@ router.put("/", verifyToken, isAdmin, async (req, res) => {
   }
 });
 
+// ✅ Activer/Désactiver 2FA
+router.patch("/twofa", verifyToken, isAdmin, async (req, res) => {
+  try {
+    const q = await db.query(
+      `UPDATE admin_settings
+       SET twofa_enabled = NOT twofa_enabled, updated_at = NOW()
+       WHERE admin_id = $1
+       RETURNING twofa_enabled`,
+      [req.user.id]
+    );
+
+    res.json({ message: "2FA mis à jour", enabled: q.rows[0].twofa_enabled });
+  } catch (err) {
+    console.error("❌ Erreur PATCH /twofa:", err);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+
 module.exports = router;
