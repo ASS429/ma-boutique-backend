@@ -272,26 +272,34 @@ router.get("/overview", verifyToken, isAdmin, async (req, res) => {
     );
 
     // ✅ Statistiques du mois en cours
-const currentQ = await db.query(
-  `SELECT 
-     COALESCE(COUNT(*),0) AS total_users,
-     COALESCE(COUNT(*) FILTER (WHERE plan = 'Premium' AND upgrade_status = 'validé'
-                      AND (expiration IS NULL OR expiration >= CURRENT_DATE)),0) AS active_premium,
-     COALESCE(SUM(amount) FILTER (WHERE plan = 'Premium' AND upgrade_status = 'validé'),0) AS revenues
-   FROM users
-   WHERE DATE_TRUNC('month', created_at) = DATE_TRUNC('month', CURRENT_DATE)`
-);
+const currentQ = await db.query(`
+  SELECT 
+    (SELECT COUNT(*) FROM users) AS total_users,
+    (SELECT COUNT(*) 
+     FROM users
+     WHERE plan = 'Premium'
+       AND upgrade_status = 'validé'
+       AND (expiration IS NULL OR expiration >= CURRENT_DATE)) AS active_premium,
+    (SELECT COALESCE(SUM(amount),0) 
+     FROM users
+     WHERE plan = 'Premium' AND upgrade_status = 'validé') AS revenues
+`);
 
     // ✅ Statistiques du mois précédent
-const prevQ = await db.query(
-  `SELECT 
-     COALESCE(COUNT(*),0) AS total_users,
-     COALESCE(COUNT(*) FILTER (WHERE plan = 'Premium' AND upgrade_status = 'validé'
-                      AND (expiration IS NULL OR expiration >= CURRENT_DATE)),0) AS active_premium,
-     COALESCE(SUM(amount) FILTER (WHERE plan = 'Premium' AND upgrade_status = 'validé'),0) AS revenues
-   FROM users
-   WHERE DATE_TRUNC('month', created_at) = DATE_TRUNC('month', CURRENT_DATE - INTERVAL '1 month')`
-);
+const prevQ = await db.query(`
+  SELECT 
+    (SELECT COUNT(*) FROM users
+     WHERE created_at < DATE_TRUNC('month', CURRENT_DATE)) AS total_users,
+    (SELECT COUNT(*) 
+     FROM users
+     WHERE plan = 'Premium'
+       AND upgrade_status = 'validé'
+       AND (expiration IS NULL OR expiration >= DATE_TRUNC('month', CURRENT_DATE))) AS active_premium,
+    (SELECT COALESCE(SUM(amount),0) 
+     FROM users
+     WHERE plan = 'Premium' AND upgrade_status = 'validé'
+       AND created_at < DATE_TRUNC('month', CURRENT_DATE)) AS revenues
+`);
 
     res.json({
       totalUsers: Number(totalUsersQ.rows[0].total),
