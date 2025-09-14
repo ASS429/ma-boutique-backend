@@ -213,4 +213,31 @@ router.get("/accounts/:method", verifyToken, isAdmin, async (req, res) => {
   }
 });
 
+/**
+ * GET /admin-stats/revenus/evolution
+ * Retourne les revenus groupés par mois pour l'année en cours
+ */
+router.get("/revenus/evolution", verifyToken, isAdmin, async (req, res) => {
+  try {
+    const q = await db.query(
+      `SELECT 
+         TO_CHAR(DATE_TRUNC('month', expiration), 'YYYY-MM') AS mois,
+         COALESCE(SUM(amount),0) AS total
+       FROM users
+       WHERE plan = 'Premium' 
+         AND upgrade_status = 'validé'
+         AND expiration IS NOT NULL
+         AND DATE_PART('year', expiration) = DATE_PART('year', CURRENT_DATE)
+       GROUP BY DATE_TRUNC('month', expiration)
+       ORDER BY mois`
+    );
+
+    res.json(q.rows); // [{ mois: "2025-01", total: 12000 }, ...]
+  } catch (err) {
+    console.error("❌ Erreur /admin-stats/revenus/evolution:", err);
+    res.status(500).json({ error: "Erreur serveur" });
+  }
+});
+
+
 module.exports = router;
