@@ -239,5 +239,49 @@ router.get("/revenus/evolution", verifyToken, isAdmin, async (req, res) => {
   }
 });
 
+/**
+ * GET /admin-stats/overview
+ * Retourne les statistiques globales pour le dashboard admin
+ */
+router.get("/overview", verifyToken, isAdmin, async (req, res) => {
+  try {
+    // Total utilisateurs
+    const totalUsersQ = await db.query(
+      `SELECT COUNT(*) AS total FROM users`
+    );
+
+    // Abonnés Premium actifs
+    const activePremiumQ = await db.query(
+      `SELECT COUNT(*) AS total 
+       FROM users
+       WHERE plan = 'Premium' AND upgrade_status = 'validé'
+         AND (expiration IS NULL OR expiration >= CURRENT_DATE)`
+    );
+
+    // Revenus validés (tous temps)
+    const revenuesQ = await db.query(
+      `SELECT COALESCE(SUM(amount),0) AS total
+       FROM users
+       WHERE plan = 'Premium' AND upgrade_status = 'validé'`
+    );
+
+    // Abonnements en attente
+    const pendingQ = await db.query(
+      `SELECT COUNT(*) AS total
+       FROM users
+       WHERE plan = 'Premium' AND upgrade_status = 'en attente'`
+    );
+
+    res.json({
+      totalUsers: Number(totalUsersQ.rows[0].total),
+      activePremium: Number(activePremiumQ.rows[0].total),
+      revenues: Number(revenuesQ.rows[0].total),
+      pending: Number(pendingQ.rows[0].total)
+    });
+  } catch (err) {
+    console.error("❌ Erreur /admin-stats/overview:", err);
+    res.status(500).json({ error: "Erreur serveur" });
+  }
+});
 
 module.exports = router;
