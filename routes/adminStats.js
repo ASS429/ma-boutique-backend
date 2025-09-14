@@ -246,32 +246,32 @@ router.get("/revenus/evolution", verifyToken, isAdmin, async (req, res) => {
 router.get("/overview", verifyToken, isAdmin, async (req, res) => {
   try {
     // Total utilisateurs (tous)
-    const totalUsersQ = await db.query(`SELECT COUNT(*) AS total FROM users`);
+const totalUsersQ = await db.query(`SELECT COUNT(*) AS total FROM users`);
 
-    // Abonnés Premium actifs (plan Premium + validé + non expirés)
-    const activePremiumQ = await db.query(
-      `SELECT COUNT(*) AS total 
-       FROM users
-       WHERE plan = 'Premium'
-         AND upgrade_status = 'validé'
-         AND (expiration IS NULL OR expiration >= CURRENT_DATE)`
-    );
+// Abonnés Premium actifs actuels
+const activePremiumQ = await db.query(
+  `SELECT COUNT(*) AS total 
+   FROM users
+   WHERE plan = 'Premium'
+     AND upgrade_status = 'validé'
+     AND (expiration IS NULL OR expiration >= CURRENT_DATE)`
+);
 
-    // Revenus validés (tous temps)
-    const revenuesQ = await db.query(
-      `SELECT COALESCE(SUM(amount),0) AS total
-       FROM users
-       WHERE plan = 'Premium' AND upgrade_status = 'validé'`
-    );
+// Revenus validés (total)
+const revenuesQ = await db.query(
+  `SELECT COALESCE(SUM(amount),0) AS total
+   FROM users
+   WHERE plan = 'Premium' AND upgrade_status = 'validé'`
+);
 
-    // Abonnements en attente
-    const pendingQ = await db.query(
-      `SELECT COUNT(*) AS total
-       FROM users
-       WHERE plan = 'Premium' AND upgrade_status = 'en attente'`
-    );
+// Abonnements en attente
+const pendingQ = await db.query(
+  `SELECT COUNT(*) AS total
+   FROM users
+   WHERE plan = 'Premium' AND upgrade_status = 'en attente'`
+);
 
-    // ✅ Statistiques du mois en cours
+// ✅ Snapshot mois courant (fin de ce mois)
 const currentQ = await db.query(`
   SELECT 
     (SELECT COUNT(*) FROM users) AS total_users,
@@ -285,7 +285,7 @@ const currentQ = await db.query(`
      WHERE plan = 'Premium' AND upgrade_status = 'validé') AS revenues
 `);
 
-    // ✅ Statistiques du mois précédent
+// ✅ Snapshot mois précédent (fin du mois précédent)
 const prevQ = await db.query(`
   SELECT 
     (SELECT COUNT(*) FROM users
