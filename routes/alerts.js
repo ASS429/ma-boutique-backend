@@ -3,14 +3,16 @@ const router = express.Router();
 const pool = require("../db");
 const verifyToken = require("../middleware/auth");
 
-// ✅ Charger toutes les alertes actives
+// ✅ Charger toutes les alertes actives avec le username de l’utilisateur
 router.get("/", verifyToken, async (req, res) => {
   try {
     const q = await pool.query(
-      `SELECT id, type, message, days, seen, ignored, created_at
-       FROM alerts
-       WHERE archived = false
-       ORDER BY created_at DESC`
+      `SELECT a.id, a.type, a.message, a.days, a.seen, a.ignored, a.created_at,
+              u.username
+       FROM alerts a
+       LEFT JOIN users u ON a.user_id = u.id
+       WHERE a.archived = false
+       ORDER BY a.created_at DESC`
     );
     res.json(q.rows);
   } catch (err) {
@@ -18,6 +20,7 @@ router.get("/", verifyToken, async (req, res) => {
     res.status(500).json({ error: "Impossible de charger les alertes" });
   }
 });
+
 
 // ✅ Marquer une alerte comme vue
 router.patch("/:id/seen", verifyToken, async (req, res) => {
