@@ -7,6 +7,7 @@ const port = process.env.PORT || 4000;
 
 const adminWithdrawalsRoutes = require("./routes/adminWithdrawals");
 
+const alertsRoutes = require("./routes/alerts");
 
 // Middleware
 const allowedOrigins = [
@@ -50,6 +51,7 @@ app.use("/admin-stats", require('./routes/adminStats'));
 app.use("/admin-withdrawals", adminWithdrawalsRoutes);
 app.use("/admin-transfers", require("./routes/adminTransfers"));
 app.use("/admin-settings", require("./routes/adminSettings"));
+app.use("/alerts", alertsRoutes);
 
 
 
