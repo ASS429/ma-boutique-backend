@@ -391,4 +391,53 @@ router.put('/upgrade/:userId/reject', authenticateToken, isAdmin, async (req, re
   }
 });
 
+// ==========================
+//   Vérifier le code 2FA
+// ==========================
+router.post("/verify-2fa", async (req, res) => {
+  const { userId, code } = req.body;
+
+  if (!userId || !code) {
+    return res.status(400).json({ error: "Champs manquants" });
+  }
+
+  try {
+    const q = await pool.query(
+      `SELECT * FROM twofa_codes 
+       WHERE user_id = $1 AND code = $2 AND used = false 
+         AND expires_at > NOW() 
+       ORDER BY created_at DESC LIMIT 1`,
+      [userId, code]
+    );
+
+    if (q.rows.length === 0) {
+      return res.status(400).json({ error: "Code invalide ou expiré" });
+    }
+
+    // Marquer comme utilisé
+    await pool.query(`UPDATE twofa_codes SET used = true WHERE id = $1`, [q.rows[0].id]);
+
+    // Récupérer l'utilisateur
+    const u = await pool.query(
+      "SELECT id, username, role, company_name, phone, plan, upgrade_status FROM users WHERE id = $1",
+      [userId]
+    );
+    const user = u.rows[0];
+
+    const token = jwt.sign(
+      { id: user.id, username: user.username, role: user.role },
+      process.env.JWT_SECRET,
+      { expiresIn: "1h" }
+    );
+
+    res.json({
+      token,
+      user
+    });
+  } catch (err) {
+    console.error("❌ Erreur verify-2fa:", err);
+    res.status(500).json({ error: err.message });
+  }
+});
+
 module.exports = router;
