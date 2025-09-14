@@ -84,6 +84,9 @@ router.post("/register", async (req, res) => {
 // ==========================
 //   Connexion
 // ==========================
+// ==========================
+//   Connexion avec 2FA
+// ==========================
 router.post("/login", async (req, res) => {
   const { username, password } = req.body;
 
@@ -113,6 +116,35 @@ router.post("/login", async (req, res) => {
       return res.status(401).json({ error: "Mot de passe incorrect" });
     }
 
+    // Vérifier si 2FA activée
+    const settings = await pool.query(
+      "SELECT twofa_enabled FROM admin_settings WHERE admin_id = $1 LIMIT 1",
+      [user.id]
+    );
+
+    const twofaEnabled = settings.rows[0]?.twofa_enabled || false;
+
+    if (twofaEnabled && user.role === "admin") {
+      // Générer un code 6 chiffres
+      const code = Math.floor(100000 + Math.random() * 900000).toString();
+      const expires = new Date(Date.now() + 5 * 60 * 1000); // expire dans 5 min
+
+      await pool.query(
+        `INSERT INTO twofa_codes (user_id, code, expires_at) VALUES ($1, $2, $3)`,
+        [user.id, code, expires]
+      );
+
+      // TODO: envoi email → ici simplifié en console.log
+      console.log(`📧 Code 2FA pour ${user.username} : ${code}`);
+
+      return res.json({
+        twofa_required: true,
+        userId: user.id,
+        message: "Code 2FA envoyé par email"
+      });
+    }
+
+    // Sinon → connexion normale
     const token = jwt.sign(
       { id: user.id, username: user.username, role: user.role },
       process.env.JWT_SECRET,
@@ -136,6 +168,7 @@ router.post("/login", async (req, res) => {
     res.status(500).json({ error: err.message });
   }
 });
+
 
 // ==========================
 //   Middleware Auth
