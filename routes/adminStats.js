@@ -241,20 +241,19 @@ router.get("/revenus/evolution", verifyToken, isAdmin, async (req, res) => {
 
 /**
  * GET /admin-stats/overview
- * Retourne les statistiques globales pour le dashboard admin
+ * Retourne les statistiques globales + comparaison avec mois précédent
  */
 router.get("/overview", verifyToken, isAdmin, async (req, res) => {
   try {
-    // Total utilisateurs
-    const totalUsersQ = await db.query(
-      `SELECT COUNT(*) AS total FROM users`
-    );
+    // Total utilisateurs (tous)
+    const totalUsersQ = await db.query(`SELECT COUNT(*) AS total FROM users`);
 
-    // Abonnés Premium actifs
+    // Abonnés Premium actifs (plan Premium + validé + non expirés)
     const activePremiumQ = await db.query(
       `SELECT COUNT(*) AS total 
        FROM users
-       WHERE plan = 'Premium' AND upgrade_status = 'validé'
+       WHERE plan = 'Premium'
+         AND upgrade_status = 'validé'
          AND (expiration IS NULL OR expiration >= CURRENT_DATE)`
     );
 
@@ -272,16 +271,53 @@ router.get("/overview", verifyToken, isAdmin, async (req, res) => {
        WHERE plan = 'Premium' AND upgrade_status = 'en attente'`
     );
 
+    // ✅ Statistiques du mois en cours
+    const currentQ = await db.query(
+      `SELECT 
+         COUNT(*) AS total_users,
+         COUNT(*) FILTER (WHERE plan = 'Premium' AND upgrade_status = 'validé'
+                          AND (expiration IS NULL OR expiration >= CURRENT_DATE)) AS active_premium,
+         COALESCE(SUM(amount),0) FILTER (WHERE plan = 'Premium' AND upgrade_status = 'validé') AS revenues
+       FROM users
+       WHERE DATE_TRUNC('month', created_at) = DATE_TRUNC('month', CURRENT_DATE)`
+    );
+
+    // ✅ Statistiques du mois précédent
+    const prevQ = await db.query(
+      `SELECT 
+         COUNT(*) AS total_users,
+         COUNT(*) FILTER (WHERE plan = 'Premium' AND upgrade_status = 'validé'
+                          AND (expiration IS NULL OR expiration >= CURRENT_DATE)) AS active_premium,
+         COALESCE(SUM(amount),0) FILTER (WHERE plan = 'Premium' AND upgrade_status = 'validé') AS revenues
+       FROM users
+       WHERE DATE_TRUNC('month', created_at) = DATE_TRUNC('month', CURRENT_DATE - INTERVAL '1 month')`
+    );
+
     res.json({
       totalUsers: Number(totalUsersQ.rows[0].total),
       activePremium: Number(activePremiumQ.rows[0].total),
       revenues: Number(revenuesQ.rows[0].total),
-      pending: Number(pendingQ.rows[0].total)
+      pending: Number(pendingQ.rows[0].total),
+      growth: {
+        totalUsers: {
+          current: Number(currentQ.rows[0].total_users || 0),
+          previous: Number(prevQ.rows[0].total_users || 0),
+        },
+        activePremium: {
+          current: Number(currentQ.rows[0].active_premium || 0),
+          previous: Number(prevQ.rows[0].active_premium || 0),
+        },
+        revenues: {
+          current: Number(currentQ.rows[0].revenues || 0),
+          previous: Number(prevQ.rows[0].revenues || 0),
+        },
+      }
     });
   } catch (err) {
     console.error("❌ Erreur /admin-stats/overview:", err);
     res.status(500).json({ error: "Erreur serveur" });
   }
 });
+
 
 module.exports = router;
