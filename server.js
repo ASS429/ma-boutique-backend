@@ -49,7 +49,7 @@ app.use('/stats', require('./routes/stats'));
 app.use("/admin-stats", require('./routes/adminStats'));
 app.use("/admin-withdrawals", adminWithdrawalsRoutes);
 app.use("/admin-transfers", require("./routes/adminTransfers"));
-
+app.use("/admin-settings", require("./routes/adminSettings"));
 
 
 
