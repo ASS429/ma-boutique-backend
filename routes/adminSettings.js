@@ -43,11 +43,11 @@ router.put("/", verifyToken, isAdmin, async (req, res) => {
     timezone,
     premium_price,
     grace_period,
-    auto_alerts,
-    notify_new_sub,
-    notify_late_pay,
+    alerts_enabled,
+    notify_new_subs,
+    notify_late_payments,
     notify_reports,
-    allow_multi_sessions,
+    multi_sessions,
   } = req.body;
 
   try {
@@ -58,11 +58,11 @@ router.put("/", verifyToken, isAdmin, async (req, res) => {
            timezone = $3,
            premium_price = $4,
            grace_period = $5,
-           auto_alerts = $6,
-           notify_new_sub = $7,
-           notify_late_pay = $8,
+           alerts_enabled = $6,
+           notify_new_subs = $7,
+           notify_late_payments = $8,
            notify_reports = $9,
-           allow_multi_sessions = $10,
+           multi_sessions = $10,
            updated_at = NOW()
        WHERE admin_id = $11
        RETURNING *`,
@@ -72,11 +72,11 @@ router.put("/", verifyToken, isAdmin, async (req, res) => {
         timezone,
         premium_price,
         grace_period,
-        auto_alerts,
-        notify_new_sub,
-        notify_late_pay,
+        alerts_enabled,
+        notify_new_subs,
+        notify_late_payments,
         notify_reports,
-        allow_multi_sessions,
+        multi_sessions,
         req.user.id,
       ]
     );
