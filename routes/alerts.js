@@ -4,7 +4,7 @@ const pool = require("../db");
 const verifyToken = require("../middleware/auth");
 
 // ✅ Récupérer les alertes de paiements
-router.get("/alerts", verifyToken, async (req, res) => {
+router.get("/", verifyToken, async (req, res) => {
   try {
     const late = await pool.query(
       `SELECT id, username, expiration, CURRENT_DATE - expiration AS days_late
@@ -21,7 +21,6 @@ router.get("/alerts", verifyToken, async (req, res) => {
 
     const alerts = [];
 
-    // Paiements en retard
     late.rows.forEach(u => {
       alerts.push({
         id: `late-${u.id}`,
@@ -31,7 +30,6 @@ router.get("/alerts", verifyToken, async (req, res) => {
       });
     });
 
-    // Paiements bientôt dus
     upcoming.rows.forEach(u => {
       alerts.push({
         id: `upcoming-${u.id}`,
