@@ -3,94 +3,64 @@ const router = express.Router();
 const pool = require("../db");
 const verifyToken = require("../middleware/auth");
 
-// ✅ Récupérer les alertes (lecture seule)
+// ✅ Charger toutes les alertes actives
 router.get("/", verifyToken, async (req, res) => {
   try {
-    const late = await pool.query(
-      `SELECT id, username, expiration, CURRENT_DATE - expiration AS days_late
-       FROM users
-       WHERE plan = 'Premium' AND expiration < CURRENT_DATE`
+    const q = await pool.query(
+      `SELECT id, type, message, days, seen, ignored, created_at
+       FROM alerts
+       WHERE archived = false
+       ORDER BY created_at DESC`
     );
-
-    const upcoming = await pool.query(
-      `SELECT id, username, expiration, expiration - CURRENT_DATE AS days_left
-       FROM users
-       WHERE plan = 'Premium' 
-         AND expiration BETWEEN CURRENT_DATE AND CURRENT_DATE + INTERVAL '3 days'`
-    );
-
-    const alerts = [];
-
-    // Paiements en retard
-    late.rows.forEach(u => {
-      alerts.push({
-        id: `late-${u.id}`,
-        name: u.username,
-        type: "late",
-        message: `Paiement en retard de ${u.days_late} jours`
-      });
-    });
-
-    // Paiements bientôt dus
-    upcoming.rows.forEach(u => {
-      alerts.push({
-        id: `upcoming-${u.id}`,
-        name: u.username,
-        type: "upcoming",
-        message: `Paiement dû dans ${u.days_left} jours`
-      });
-    });
-
-    res.json(alerts);
+    res.json(q.rows);
   } catch (err) {
     console.error("❌ Erreur GET /alerts:", err);
     res.status(500).json({ error: "Impossible de charger les alertes" });
   }
 });
 
-// ✅ Recalculer les alertes manuellement (admin only)
-router.post("/refresh", verifyToken, async (req, res) => {
+// ✅ Marquer une alerte comme vue
+router.patch("/:id/seen", verifyToken, async (req, res) => {
   try {
-    console.log("🔄 Rafraîchissement manuel des alertes...");
-
-    await pool.query("DELETE FROM alerts");
-
-    // Paiements en retard
-    const late = await pool.query(
-      `SELECT id, username, expiration, CURRENT_DATE - expiration AS days_late
-       FROM users
-       WHERE plan = 'Premium' AND expiration < CURRENT_DATE`
+    const q = await pool.query(
+      `UPDATE alerts SET seen = true WHERE id = $1 RETURNING *`,
+      [req.params.id]
     );
-
-    for (const u of late.rows) {
-      await pool.query(
-        `INSERT INTO alerts (user_id, type, message, days)
-         VALUES ($1, 'late', $2, $3)`,
-        [u.id, `Paiement en retard de ${u.days_late} jours`, u.days_late]
-      );
-    }
-
-    // Paiements bientôt dus
-    const upcoming = await pool.query(
-      `SELECT id, username, expiration, expiration - CURRENT_DATE AS days_left
-       FROM users
-       WHERE plan = 'Premium'
-         AND expiration BETWEEN CURRENT_DATE AND CURRENT_DATE + INTERVAL '3 days'`
-    );
-
-    for (const u of upcoming.rows) {
-      await pool.query(
-        `INSERT INTO alerts (user_id, type, message, days)
-         VALUES ($1, 'upcoming', $2, $3)`,
-        [u.id, `Paiement dû dans ${u.days_left} jours`, u.days_left]
-      );
-    }
-
-    console.log("✅ Rafraîchissement manuel terminé !");
-    res.json({ message: "✅ Alertes recalculées avec succès" });
+    if (q.rows.length === 0) return res.status(404).json({ error: "Alerte introuvable" });
+    res.json({ message: "✅ Alerte marquée comme vue", alert: q.rows[0] });
   } catch (err) {
-    console.error("❌ Erreur POST /alerts/refresh:", err);
-    res.status(500).json({ error: "Impossible de recalculer les alertes" });
+    console.error("❌ Erreur PATCH /alerts/:id/seen:", err);
+    res.status(500).json({ error: "Impossible de mettre à jour l’alerte" });
+  }
+});
+
+// ✅ Ignorer une alerte (gardée mais signalée ignorée)
+router.patch("/:id/ignore", verifyToken, async (req, res) => {
+  try {
+    const q = await pool.query(
+      `UPDATE alerts SET ignored = true WHERE id = $1 RETURNING *`,
+      [req.params.id]
+    );
+    if (q.rows.length === 0) return res.status(404).json({ error: "Alerte introuvable" });
+    res.json({ message: "✅ Alerte ignorée", alert: q.rows[0] });
+  } catch (err) {
+    console.error("❌ Erreur PATCH /alerts/:id/ignore:", err);
+    res.status(500).json({ error: "Impossible d’ignorer l’alerte" });
+  }
+});
+
+// ✅ Fermer une alerte (supprimer ou archiver)
+router.delete("/:id", verifyToken, async (req, res) => {
+  try {
+    const q = await pool.query(
+      `UPDATE alerts SET archived = true WHERE id = $1 RETURNING *`,
+      [req.params.id]
+    );
+    if (q.rows.length === 0) return res.status(404).json({ error: "Alerte introuvable" });
+    res.json({ message: "✅ Alerte fermée", alert: q.rows[0] });
+  } catch (err) {
+    console.error("❌ Erreur DELETE /alerts/:id:", err);
+    res.status(500).json({ error: "Impossible de fermer l’alerte" });
   }
 });
 
