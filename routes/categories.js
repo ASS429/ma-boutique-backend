@@ -21,7 +21,7 @@ router.get('/', verifyToken, async (req, res) => {
 // POST : Créer catégorie
 router.post('/', verifyToken, async (req, res) => {
   try {
-    const { name } = req.body;
+    const { name, emoji } = req.body;
     if (!name || name.trim() === '') {
       return res.status(400).json({ error: 'Le nom de la catégorie est requis' });
     }
