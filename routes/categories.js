@@ -8,7 +8,7 @@ router.get('/', verifyToken, async (req, res) => {
   console.log("👤 Utilisateur authentifié:", req.user);
   try {
     const result = await db.query(
-      'SELECT * FROM categories WHERE user_id = $1 ORDER BY id',
+      'SELECT id, name, user_id, emoji, couleur FROM categories WHERE user_id = $1 ORDER BY id',
       [req.user.id]
     );
     res.json(result.rows);
