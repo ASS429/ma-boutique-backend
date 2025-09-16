@@ -21,14 +21,17 @@ router.get('/', verifyToken, async (req, res) => {
 // POST : Créer catégorie
 router.post('/', verifyToken, async (req, res) => {
   try {
-    const { name, emoji } = req.body;
+    const { name, emoji, couleur } = req.body;
+
     if (!name || name.trim() === '') {
       return res.status(400).json({ error: 'Le nom de la catégorie est requis' });
     }
 
     const result = await db.query(
-      'INSERT INTO categories (name, user_id) VALUES ($1, $2) RETURNING *',
-      [name.trim(), req.user.id]
+      `INSERT INTO categories (name, user_id, emoji, couleur) 
+       VALUES ($1, $2, $3, $4) 
+       RETURNING id, name, user_id, emoji, couleur`,
+      [name.trim(), req.user.id, emoji || '🏷️', couleur || null]
     );
 
     res.status(201).json(result.rows[0]);
@@ -37,6 +40,7 @@ router.post('/', verifyToken, async (req, res) => {
     res.status(500).json({ error: 'Erreur serveur' });
   }
 });
+
 
 // DELETE : Supprimer catégorie utilisateur
 router.delete('/:id', verifyToken, async (req, res) => {
